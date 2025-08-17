@@ -46,4 +46,6 @@ def sql_injection_test(payloads, url):
         else:
             print(f"Payload '{payload}' did not bypass authentication.")
 
+# Exemplo de uso no JuiceShop
 
+sql_injection_test(bypass_sql_injection_list, "http://localhost:3000/#/login")
