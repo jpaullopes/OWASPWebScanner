@@ -7,3 +7,7 @@ def login_test(url, dictionary_login):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return
+
+resposta = login_test("http://localhost/login.php", {"username": "admin", "password": "password", "user_token" : })
+
+print(resposta.text)
