@@ -2,16 +2,18 @@ import requests
 from src.recon.spider import html_extractor
 from bs4 import BeautifulSoup
 
-def login_test(url, dictionary_login):
+session = requests.Session()
+
+def login_test(url, dictionary_login, session):
     try:
-        response = requests.post(url, data=dictionary_login)
+        response = session.post(url, data=dictionary_login)
         return response
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return
 
-def token_extractor(url, token_name):
-    soup = html_extractor(url)
+def token_extractor(url, token_name, session):
+    soup = html_extractor(url, session)
     token = soup.find("input", {"name": token_name})['value']
     return token
 
