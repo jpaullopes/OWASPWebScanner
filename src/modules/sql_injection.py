@@ -1,5 +1,5 @@
 import requests
-from recon.spider import html_extractor
+from src.recon.spider import html_extractor
 from bs4 import BeautifulSoup
 
 def login_test(url, dictionary_login):
@@ -17,6 +17,6 @@ def token_extractor(url, token_name):
 
 user_token = token_extractor("http://localhost/login.php", "user_token")
 
-resposta = login_test("http://localhost/login.php", {"username": "admin", "password": "password", "user_token" : user_token})
+resposta = login_test("http://localhost/login.php", {"username": "admin", "password": "password", "user_token" : f"{user_token}"})
 
 print(resposta.text)
