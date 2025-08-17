@@ -2,6 +2,7 @@ from requests import get, exceptions
 from bs4 import BeautifulSoup
 
 def html_extractor(url, session):
+    """Extrai o HTML da URL e retorna o objeto BeautifulSoup."""
     try:
         html = session.get(url)
         return BeautifulSoup(html.text, "html.parser")

