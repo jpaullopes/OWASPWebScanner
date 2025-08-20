@@ -8,22 +8,21 @@ import time
 def find_tags(html_content, tags):
     soup = BeautifulSoup(html_content, 'html.parser')
     found_tags = {}
+
     for tag in tags:
         found_tags[tag] = [str(element) for element in soup.find_all(tag)]
     return found_tags
 
-
+#Captura HTML após renderização do JavaScript.
 def get_rendered_html(url):
-    """Captura HTML após renderização do JavaScript."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Sem interface gráfica
-
+    chrome_options.add_argument("--headless")  
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
         driver.get(url)
         # Aguarda carregamento completo
-        time.sleep(5)  # Ajuste conforme necessário
+        time.sleep(3)  
         return driver.page_source
     finally:
         driver.quit()
@@ -31,8 +30,8 @@ def get_rendered_html(url):
 
 # Uso
 html = get_rendered_html("http://localhost:3000/#/login/")
-print(html)
+#print(html)
 
-tags_to_find = ['input', 'form', 'textarea', 'select']
-found_tags = find_tags(html, tags_to_find)
+TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
+found_tags = find_tags(html, TAGS_TO_FIND)
 print(found_tags)
