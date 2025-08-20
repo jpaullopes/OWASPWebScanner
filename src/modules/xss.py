@@ -1,7 +1,9 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-import time
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
@@ -26,8 +28,8 @@ def get_rendered_html(url):
 
     try:
         driver.get(url)
-        # Aguarda carregamento completo
-        time.sleep(3)  
+        # Espera o carregamento completo da página
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body"))) 
         return driver.page_source
     finally:
         driver.quit()
