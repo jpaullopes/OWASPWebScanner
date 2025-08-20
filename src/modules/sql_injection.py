@@ -46,5 +46,3 @@ def sql_injection_test(payloads, url):
     return bypassed_payloads
 
 
-# Exemplo de uso no JuiceShop
-sql_injection_test(bypass_sql_injection_list, "http://localhost:3000/rest/user/login")
