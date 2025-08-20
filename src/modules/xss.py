@@ -44,7 +44,5 @@ def get_rendered_html(url):
 
 # Uso
 html = get_rendered_html("http://localhost:3000/#/login/")
-#print(html)
-
 found_tags = find_tags(html, TAGS_TO_FIND)
 print(found_tags)
