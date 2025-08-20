@@ -11,14 +11,21 @@ def find_tags(html_content, tags):
     """Função responsável por encontrar as tags passadas como parâmetro"""
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        found_tags = {}
+        found_tags = []
 
         for tag in tags:
-            found_tags[tag] = [str(element) for element in soup.find_all(tag)]
+            foud_tag_elements = soup.find_all(tag)
+            for tag_elements in foud_tag_elements:
+                if tag_elements:
+                    tag_info = { "name" : tag_elements.get('name'),
+                                "id" :  tag_elements.get('id'),
+                                "type" : tag_elements.get('type'),
+                                }
+                    found_tags.append(tag_info)
         return found_tags
     except Exception as e:
         print(f"An error occurred while parsing HTML: {e}")
-        return {tag: [] for tag in tags}
+        return []
 
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
