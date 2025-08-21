@@ -39,6 +39,33 @@ def get_rendered_html(url):
         driver.get(url)
         # Espera o carregamento completo da página
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body"))) 
+        
+        # Tenta fechar modal/popup comum
+        try:
+            # Procura botão de fechar (X)
+            close_button = driver.find_element(By.XPATH, "//button[contains(@class, 'close') or contains(@aria-label, 'close') or text()='×']")
+            close_button.click()
+            time.sleep(1)
+        except:
+            try:
+                # Procura botão "Dismiss" ou "OK"
+                dismiss_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Dismiss') or contains(text(), 'OK') or contains(text(), 'Close')]")
+                dismiss_button.click()
+                time.sleep(1)
+            except:
+                try:
+                    # Tenta clicar fora do modal (no backdrop)
+                    backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
+                    backdrop.click()
+                    time.sleep(1)
+                except:
+                    try:
+                        # Pressiona ESC para fechar modal
+                        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+                        time.sleep(1)
+                    except:
+                        pass
+        
         return driver
     except Exception as e:
         print(f"An error occurred while loading the page: {e}")
@@ -126,7 +153,7 @@ def eco_verificator(driver, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
-driver = get_rendered_html("http://localhost:3000/#/search")
+driver = get_rendered_html("http://localhost:3000/#/login")
 if driver:
     html = driver.page_source
     found_tags = find_tags(html, TAGS_TO_FIND)
@@ -136,4 +163,4 @@ if driver:
     print(f"Resultados do teste: {test_results}")
     
     driver.quit()
-    
+
