@@ -80,6 +80,15 @@ def eco_test(lista, driver, test_text):
         try:
             input_field = None
             
+            # Pula checkboxes e outros tipos não-texto
+            if element.get('type') in ['checkbox', 'radio', 'submit', 'button']:
+                results.append({
+                    'element': element,
+                    'status': 'skipped',
+                    'error': f"Skipped {element.get('type')} element"
+                })
+                continue
+            
             # Tenta encontrar por ID primeiro
             if element['id']:
                 try:
@@ -87,6 +96,7 @@ def eco_test(lista, driver, test_text):
                     # Rola até o elemento e clica nele para ativar
                     driver.execute_script("arguments[0].scrollIntoView();", input_field)
                     input_field.click()
+                    time.sleep(0.5)  # Aguarda um pouco após o clique
                     # Aguarda o elemento ficar interagível
                     WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
                 except:
@@ -98,12 +108,18 @@ def eco_test(lista, driver, test_text):
                     input_field = driver.find_element(By.NAME, element['name'])
                     driver.execute_script("arguments[0].scrollIntoView();", input_field)
                     input_field.click()
+                    time.sleep(0.5)
                     WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
                 except:
                     pass
                     
             if input_field:
-                input_field.clear() 
+                # Só tenta clear() se não for checkbox/radio
+                try:
+                    input_field.clear() 
+                except:
+                    pass  # Se clear() falhar, continua sem limpar
+                
                 input_field.send_keys(test_text)
 
                 try:
