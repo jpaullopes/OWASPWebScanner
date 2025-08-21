@@ -67,6 +67,19 @@ def get_rendered_html(url):
                     except:
                         pass
         
+        # Tenta clicar na lupa de busca para ativar o campo
+        try:
+            search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
+            search_icon.click()
+            time.sleep(2)  
+        except:
+            try:
+                search_button = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'search')]")
+                search_button.click()
+                time.sleep(2)
+            except:
+                pass
+                
         return driver
     except Exception as e:
         print(f"An error occurred while loading the page: {e}")
@@ -175,14 +188,17 @@ def eco_verificator(driver, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
-driver = get_rendered_html("http://localhost:3000/#/login")
+driver = get_rendered_html("http://localhost:3000/#/search")
 if driver:
     html = driver.page_source
     found_tags = find_tags(html, TAGS_TO_FIND)
     
     # Testa os campos encontrados
     test_results = eco_test(found_tags, driver,"TESTANDO")
-    print(f"Resultados do teste: {test_results}")
+    # Filtra apenas os sucessos
+    successful_results = [result for result in test_results if result['status'] == 'success']
+    print(test_results)
+    print(f"Resultados do teste: {successful_results}")
     
     driver.quit()
 
