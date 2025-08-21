@@ -44,15 +44,32 @@ def get_rendered_html(url):
         return None
 
 
-def eco_test(lista, driver):
+def eco_test(lista, driver, test_text):
     """Função de teste para enviar um texto nos campos de input."""
-    test_text = "test"
+    results = []
+    
     for element in lista:
-        if driver.find_element(By.NAME, element['name']) and driver.find_element(By.ID, element['id']):
-            input_field = driver.find_element(By.NAME, element['name'])
-            input_field.send_keys(test_text)
-            input_field.submit()
-
+        try:
+            # Verifica se o elemento existe
+            if element['name'] and driver.find_element(By.NAME, element['name']):
+                input_field = driver.find_element(By.NAME, element['name'])
+                input_field.clear() 
+                input_field.send_keys(test_text)
+                
+                results.append({
+                    'element': element,
+                    'status': 'success',
+                    'payload_sent': test_text
+                })
+                
+        except Exception as e:
+            results.append({
+                'element': element,
+                'status': 'failed',
+                'error': str(e)
+            })
+    
+    return results
 
 
 # Uso
