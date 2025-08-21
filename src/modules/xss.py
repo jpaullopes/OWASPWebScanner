@@ -194,7 +194,6 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
         print(f"An error occurred during blind XSS injection testing: {e}")
         return []
 
-
  
 # Exemplo de uso
 driver = get_rendered_html("http://localhost:3000/#/search")

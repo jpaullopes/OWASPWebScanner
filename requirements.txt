@@ -2,3 +2,7 @@ requests
 beautifulsoup4
 selenium
 webdriver-manager
+threading
+socketserver
+http.server
+pyngrok
