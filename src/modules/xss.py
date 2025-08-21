@@ -43,7 +43,6 @@ def get_rendered_html(url):
         driver.quit()
         return None
 
-
 def eco_test(lista, driver, test_text):
     """Função de teste para enviar um texto nos campos de input."""
     results = []
@@ -55,6 +54,7 @@ def eco_test(lista, driver, test_text):
                 input_field = driver.find_element(By.NAME, element['name'])
                 input_field.clear() 
                 input_field.send_keys(test_text)
+                input_field.submit()
                 
                 results.append({
                     'element': element,
@@ -71,11 +71,14 @@ def eco_test(lista, driver, test_text):
     
     return results
 
-
-# Uso
-html = get_rendered_html("http://localhost:3000/#/login/")
-if html:
-    html = html.page_source
+driver = get_rendered_html("http://localhost:3000/#/login/")
+if driver:
+    html = driver.page_source
     found_tags = find_tags(html, TAGS_TO_FIND)
-    print(found_tags)
+    
+    # Testa os campos encontrados
+    test_results = eco_test(found_tags, driver,"TESTANDO")
+    print(f"Resultados do teste: {test_results}")
+    
+    driver.quit()
     
