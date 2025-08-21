@@ -156,7 +156,7 @@ def build_payloads(url_ouvinte):
     return payloads
 
 
-def xss_injection(payloads, url, campos, url_ouvinte):
+def xss_injection(payloads, driver, campos, url_ouvinte):
     """Testa cada payload na lista de XSS"""
     # Lista de payloads que funcionaram
     bypassed_payloads = []
@@ -165,8 +165,9 @@ def xss_injection(payloads, url, campos, url_ouvinte):
         payloads = build_payloads(url_ouvinte)
         for payload in payloads:
             for campo in campos:
-                # reaproveitando a função eco_test
-                results = eco_test([campo], get_rendered_html(url), payload)
+                # Reaproveitando a função eco_test
+                results = eco_test([campo], driver, payload)
+                # Filtra os resultados que tiveram sucesso
                 for result in results:
                     if result['status'] == 'success' and result['eco_text']:
                         bypassed_payloads.append({
@@ -180,8 +181,6 @@ def xss_injection(payloads, url, campos, url_ouvinte):
         return []
 
  
-
-
 # Exemplo de uso
 driver = get_rendered_html("http://localhost:3000/#/search")
 if driver:
