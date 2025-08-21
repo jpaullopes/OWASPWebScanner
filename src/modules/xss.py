@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+import server_ouvinte
 
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
@@ -195,18 +196,5 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
         return []
 
  
-# Exemplo de uso
-driver = get_rendered_html("http://localhost:3000/#/login")
-if driver:
-    html = driver.page_source
-    found_tags = find_tags(html, TAGS_TO_FIND)
-    
-    # Testa os campos encontrados
-    test_results = eco_test(found_tags, driver,"TESTANDO")
-    # Filtra apenas os sucessos
-    successful_results = [result for result in test_results if result['status'] == 'success']
-    print(f"Resultados do teste: {successful_results}")
 
-    
-    driver.quit()
 
