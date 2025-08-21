@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+import time
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
@@ -31,7 +32,7 @@ def find_tags(html_content, tags):
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  
+    #chrome_options.add_argument("--headless")  
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
@@ -50,9 +51,31 @@ def eco_test(lista, driver, test_text):
     
     for element in lista:
         try:
-            # Verifica se o elemento existe
-            if element['name'] and driver.find_element(By.NAME, element['name']):
-                input_field = driver.find_element(By.NAME, element['name'])
+            input_field = None
+            
+            # Tenta encontrar por ID primeiro
+            if element['id']:
+                try:
+                    input_field = driver.find_element(By.ID, element['id'])
+                    # Rola até o elemento e clica nele para ativar
+                    driver.execute_script("arguments[0].scrollIntoView();", input_field)
+                    input_field.click()
+                    # Aguarda o elemento ficar interagível
+                    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
+                except:
+                    pass
+            
+            # Se não encontrou por ID, tenta por NAME
+            if not input_field and element['name']:
+                try:
+                    input_field = driver.find_element(By.NAME, element['name'])
+                    driver.execute_script("arguments[0].scrollIntoView();", input_field)
+                    input_field.click()
+                    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
+                except:
+                    pass
+                    
+            if input_field:
                 input_field.clear() 
                 input_field.send_keys(test_text)
 
@@ -72,7 +95,14 @@ def eco_test(lista, driver, test_text):
                 results.append({
                     'element': element,
                     'status': 'success',
-                    'payload_sent': test_text
+                    'payload_sent': test_text,
+                    'eco_text': eco_verificator(driver, test_text)
+                })
+            else:
+                results.append({
+                    'element': element,
+                    'status': 'failed',
+                    'error': 'Element not found by ID or NAME'
                 })
                 
         except Exception as e:
@@ -96,7 +126,7 @@ def eco_verificator(driver, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
-driver = get_rendered_html("http://localhost:3000/#/login/")
+driver = get_rendered_html("http://localhost:3000/#/search")
 if driver:
     html = driver.page_source
     found_tags = find_tags(html, TAGS_TO_FIND)
@@ -104,9 +134,6 @@ if driver:
     # Testa os campos encontrados
     test_results = eco_test(found_tags, driver,"TESTANDO")
     print(f"Resultados do teste: {test_results}")
-    print(" ")
-    result = eco_verificator(driver, "TESTANDO")
-    print(f"O texto foi processado corretamente? {result}")
     
     driver.quit()
     
