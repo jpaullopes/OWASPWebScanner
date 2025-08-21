@@ -32,21 +32,19 @@ def find_tags(html_content, tags):
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
     chrome_options = Options()
-    #chrome_options.add_argument("--headless")  
+    chrome_options.add_argument("--headless")  
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
         driver.get(url)
-        # Espera o carregamento completo da página
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body"))) 
-        time.sleep(3)
-        
-        # Tenta fechar modal/popup comum
+
+        # Tenta fechar modal ou um popup comum para não interferir nos testes
         try:
-            # Procura botão de fechar (X)
+            # Procura botão de fechar
             close_button = driver.find_element(By.XPATH, "//button[contains(@class, 'close') or contains(@aria-label, 'close') or text()='×']")
             close_button.click()
-            time.sleep(1)
+            WebDriverWait(driver, 5).until(EC.invisibility_of_element(close_button))
         except:
             try:
                 # Procura botão "Dismiss" ou "OK"
@@ -144,6 +142,7 @@ def eco_verificator(driver, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
+# Exemplo de uso
 driver = get_rendered_html("http://localhost:3000/#/search")
 if driver:
     html = driver.page_source
