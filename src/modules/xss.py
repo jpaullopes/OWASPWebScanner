@@ -43,13 +43,15 @@ def get_rendered_html(url):
         driver.quit()
         return None
 
-#usar for para passar por toda a lista contendo os dicionarios
-# fazer umam verificação para ver se nome e id são achados usando o find_element()
-#caso sejamm achados  pega eles e usada o .send_keys() para enviar o texto de test(eco)
-#usar o submit() para enviar o form
-#ou usar o click() para clicar no botão de submit
 
-
+def eco_test(lista, driver):
+    """Função de teste para enviar um texto nos campos de input."""
+    test_text = "test"
+    for element in lista:
+        if driver.find_element(By.NAME, element['name']) and driver.find_element(By.ID, element['id']):
+            input_field = driver.find_element(By.NAME, element['name'])
+            input_field.send_keys(test_text)
+            input_field.submit()
 
 
 
