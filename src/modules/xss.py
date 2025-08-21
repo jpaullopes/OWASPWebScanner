@@ -5,7 +5,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-import server_ouvinte
 
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
@@ -30,10 +29,29 @@ def find_tags(html_content, tags):
         print(f"An error occurred while parsing HTML: {e}")
         return []
 
+def activate_search_field(driver):
+    """Ativa o campo de busca clicando no ícone da lupa"""
+    try:
+        # Passo 1: Encontrar o ícone da lupa com texto "search"
+        search_icon = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//mat-icon[text()='search']"))
+        )
+        # Passo 2: Clicar no ícone
+        search_icon.click()
+        # Passo 3: Esperar pela barra de pesquisa ficar visível e clicável
+        search_input = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.ID, "mat-input-1"))
+        )
+        return True
+        
+    except Exception as e:
+        print(f"Erro ao ativar campo de busca: {e}")
+        return False
+
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  
+    #chrome_options.add_argument("--headless")  
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
@@ -65,7 +83,11 @@ def get_rendered_html(url):
                         WebDriverWait(driver, 5).until(EC.invisibility_of_element(backdrop))
                     except:
                         pass
-              
+        
+        # NOVO: Se a URL é da página de busca, ativa o campo de busca
+        if "/search" in url:
+            activate_search_field(driver)
+            
         return driver
     except Exception as e:
         print(f"An error occurred while loading the page: {e}")
@@ -194,7 +216,3 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
     except Exception as e:
         print(f"An error occurred during blind XSS injection testing: {e}")
         return []
-
- 
-
-
