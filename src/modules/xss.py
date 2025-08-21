@@ -6,7 +6,6 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 
-
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
 def find_tags(html_content, tags):
@@ -83,11 +82,7 @@ def get_rendered_html(url):
                         WebDriverWait(driver, 5).until(EC.invisibility_of_element(backdrop))
                     except:
                         pass
-        
-        # NOVO: Se a URL é da página de busca, ativa o campo de busca
-        if "/search" in url:
-            activate_search_field(driver)
-            
+              
         return driver
     except Exception as e:
         print(f"An error occurred while loading the page: {e}")
@@ -216,3 +211,5 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
     except Exception as e:
         print(f"An error occurred during blind XSS injection testing: {e}")
         return []
+
+
