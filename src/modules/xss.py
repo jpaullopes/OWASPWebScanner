@@ -4,6 +4,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
@@ -54,7 +55,19 @@ def eco_test(lista, driver, test_text):
                 input_field = driver.find_element(By.NAME, element['name'])
                 input_field.clear() 
                 input_field.send_keys(test_text)
-                input_field.submit()
+
+                try:
+                    # Procura pelo botão de submit
+                    submit_button = driver.find_element(By.XPATH, "//button[@type='submit']")
+                    submit_button.click()
+                except:
+                    # Procura por um botão de login específico
+                    try:
+                        login_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Log in')]")
+                        login_button.click()
+                    except:
+                        # Preciona Enter 
+                        input_field.send_keys(Keys.RETURN)
                 
                 results.append({
                     'element': element,
@@ -91,6 +104,9 @@ if driver:
     # Testa os campos encontrados
     test_results = eco_test(found_tags, driver,"TESTANDO")
     print(f"Resultados do teste: {test_results}")
+    print(" ")
+    result = eco_verificator(driver, "TESTANDO")
+    print(f"O texto foi processado corretamente? {result}")
     
     driver.quit()
     
