@@ -155,6 +155,33 @@ def build_payloads(url_ouvinte):
         payloads.append(model.format(url_ouvinte=url_ouvinte))
     return payloads
 
+
+def xss_injection(payloads, url, campos, url_ouvinte):
+    """Testa cada payload na lista de XSS"""
+    # Lista de payloads que funcionaram
+    bypassed_payloads = []
+    try:
+        # Cria payloads com o link do servidor ouvinte
+        payloads = build_payloads(url_ouvinte)
+        for payload in payloads:
+            for campo in campos:
+                # reaproveitando a função eco_test
+                results = eco_test([campo], get_rendered_html(url), payload)
+                for result in results:
+                    if result['status'] == 'success' and result['eco_text']:
+                        bypassed_payloads.append({
+                            'payload': payload,
+                            'element': campo,
+                            'eco_text': result['eco_text']
+                    })
+        return bypassed_payloads
+    except Exception as e:
+        print(f"An error occurred during XSS injection testing: {e}")
+        return []
+
+ 
+
+
 # Exemplo de uso
 driver = get_rendered_html("http://localhost:3000/#/search")
 if driver:
