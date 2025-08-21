@@ -52,34 +52,21 @@ def get_rendered_html(url):
                 # Procura botão "Dismiss" ou "OK"
                 dismiss_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Dismiss') or contains(text(), 'OK') or contains(text(), 'Close')]")
                 dismiss_button.click()
-                time.sleep(1)
+                WebDriverWait(driver, 5).until(EC.invisibility_of_element(dismiss_button))
             except:
                 try:
-                    # Tenta clicar fora do modal (no backdrop)
+                    # Tenta clicar no backdrop
                     backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
                     backdrop.click()
-                    time.sleep(1)
+                    WebDriverWait(driver, 5).until(EC.invisibility_of_element(backdrop))
                 except:
                     try:
-                        # Pressiona ESC para fechar modal
+                        # Pressiona ESC 
                         driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-                        time.sleep(1)
+                        WebDriverWait(driver, 5).until(EC.invisibility_of_element(backdrop))
                     except:
                         pass
-        
-        # Tenta clicar na lupa de busca para ativar o campo
-        try:
-            search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
-            search_icon.click()
-            time.sleep(2)  
-        except:
-            try:
-                search_button = driver.find_element(By.XPATH, "//button[contains(@aria-label, 'search')]")
-                search_button.click()
-                time.sleep(2)
-            except:
-                pass
-                
+              
         return driver
     except Exception as e:
         print(f"An error occurred while loading the page: {e}")
@@ -88,70 +75,46 @@ def get_rendered_html(url):
 
 def eco_test(lista, driver, test_text):
     """Função de teste para enviar um texto nos campos de input."""
+
     results = []
-    
     for element in lista:
         try:
             input_field = None
-            
             # Pula checkboxes e outros tipos não-texto
             if element.get('type') in ['checkbox', 'radio', 'submit', 'button']:
-                results.append({
-                    'element': element,
-                    'status': 'skipped',
-                    'error': f"Skipped {element.get('type')} element"
-                })
                 continue
             
             # Tenta encontrar por ID primeiro
             if element['id']:
                 try:
                     input_field = driver.find_element(By.ID, element['id'])
-                    
-                    # Para campos Angular Material, aguarda mais tempo
-                    if 'mat-input' in element['id']:
-                        time.sleep(2)
-                    
-                    # Rola até o elemento e clica nele para ativar
-                    driver.execute_script("arguments[0].scrollIntoView();", input_field)
                     input_field.click()
-                    time.sleep(0.5)  # Aguarda um pouco após o clique
-                    # Aguarda o elemento ficar interagível
                     WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
                 except:
                     pass
-            
-            # Se não encontrou por ID, tenta por NAME
+            #  Tenta encontrar por NAME
             if not input_field and element['name']:
                 try:
                     input_field = driver.find_element(By.NAME, element['name'])
-                    driver.execute_script("arguments[0].scrollIntoView();", input_field)
                     input_field.click()
-                    time.sleep(0.5)
                     WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
                 except:
                     pass
                     
             if input_field:
-                # Só tenta clear() se não for checkbox/radio
-                try:
-                    input_field.clear() 
-                except:
-                    pass  # Se clear() falhar, continua sem limpar
-                
+                input_field.clear() 
                 input_field.send_keys(test_text)
 
                 try:
-                    # Procura pelo botão de submit
+                    # Procura por submit
                     submit_button = driver.find_element(By.XPATH, "//button[@type='submit']")
                     submit_button.click()
                 except:
-                    # Procura por um botão de login específico
+                    # Procura por login 
                     try:
                         login_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Log in')]")
                         login_button.click()
                     except:
-                        # Preciona Enter 
                         input_field.send_keys(Keys.RETURN)
                 
                 results.append({
@@ -160,12 +123,6 @@ def eco_test(lista, driver, test_text):
                     'payload_sent': test_text,
                     'eco_text': eco_verificator(driver, test_text)
                 })
-            else:
-                results.append({
-                    'element': element,
-                    'status': 'failed',
-                    'error': 'Element not found by ID or NAME'
-                })
                 
         except Exception as e:
             results.append({
@@ -173,7 +130,6 @@ def eco_test(lista, driver, test_text):
                 'status': 'failed',
                 'error': str(e)
             })
-    
     return results
 
 def eco_verificator(driver, eco_text):
