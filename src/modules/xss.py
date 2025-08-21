@@ -39,6 +39,7 @@ def get_rendered_html(url):
         driver.get(url)
         # Espera o carregamento completo da página
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body"))) 
+        time.sleep(3)
         
         # Tenta fechar modal/popup comum
         try:
@@ -93,6 +94,11 @@ def eco_test(lista, driver, test_text):
             if element['id']:
                 try:
                     input_field = driver.find_element(By.ID, element['id'])
+                    
+                    # Para campos Angular Material, aguarda mais tempo
+                    if 'mat-input' in element['id']:
+                        time.sleep(2)
+                    
                     # Rola até o elemento e clica nele para ativar
                     driver.execute_script("arguments[0].scrollIntoView();", input_field)
                     input_field.click()
