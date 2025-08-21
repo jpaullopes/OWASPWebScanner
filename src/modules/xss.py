@@ -71,6 +71,18 @@ def eco_test(lista, driver, test_text):
     
     return results
 
+def eco_verificator(driver, eco_text):
+    """Verifica se o texto enviado foi processado corretamente."""
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+        if eco_text in body_text:
+            return True
+        return False
+    except Exception as e:
+        print(f"An error occurred during verification: {e}")
+        return False
+
 driver = get_rendered_html("http://localhost:3000/#/login/")
 if driver:
     html = driver.page_source
