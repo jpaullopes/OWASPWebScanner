@@ -5,7 +5,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-import time
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
@@ -203,11 +202,5 @@ if driver:
     
     # Testa os campos encontrados
     test_results = eco_test(found_tags, driver,"TESTANDO")
-    # Filtra apenas os sucessos
-    #successful_results = [result for result in test_results if result['status'] == 'success']
-    #print(test_results)
-    #print(f"Resultados do teste: {successful_results}")
-
-    
     driver.quit()
 
