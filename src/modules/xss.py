@@ -37,12 +37,26 @@ def get_rendered_html(url):
         driver.get(url)
         # Espera o carregamento completo da página
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body"))) 
-        return driver.page_source
-    finally:
+        return driver
+    except Exception as e:
+        print(f"An error occurred while loading the page: {e}")
         driver.quit()
+        return None
+
+#usar for para passar por toda a lista contendo os dicionarios
+# fazer umam verificação para ver se nome e id são achados usando o find_element()
+#caso sejamm achados  pega eles e usada o .send_keys() para enviar o texto de test(eco)
+#usar o submit() para enviar o form
+#ou usar o click() para clicar no botão de submit
+
+
+
 
 
 # Uso
 html = get_rendered_html("http://localhost:3000/#/login/")
-found_tags = find_tags(html, TAGS_TO_FIND)
-print(found_tags)
+if html:
+    html = html.page_source
+    found_tags = find_tags(html, TAGS_TO_FIND)
+    print(found_tags)
+    
