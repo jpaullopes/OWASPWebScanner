@@ -46,7 +46,7 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     if element.get('id') == 'mat-input-1':
                         input_field = activate_mat_input_field(driver, 'mat-input-1')
                         if not input_field:
-                            print(f"[!] Campo de busca mat-input-1 não pode ser ativado")
+                            print(f"Campo de busca mat-input-1 não pode ser ativado")
                             continue
                     else:
                         # Para outros campos, usa a lógica do field_tester
@@ -54,7 +54,7 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     
                     # Verifica se conseguiu encontrar/ativar o campo
                     if not input_field:
-                        print(f"[!] Não foi possível encontrar o campo {field_name}")
+                        print(f"Não foi possível encontrar o campo {field_name}")
                         continue
                     
                     # Injeção do payload blind XSS
@@ -81,7 +81,7 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     return_to_original_page(driver, original_url)
                     
                 except Exception as e:
-                    print(f"[!] Falha ao injetar payload no campo {field_name}: {e}")
+                    print(f"Falha ao injetar payload no campo {field_name}: {e}")
                     continue
 
     except Exception as e:
@@ -90,6 +90,3 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
 
     return injected_payloads
 
-# Re-exporta funções essenciais para compatibilidade
-from ...recon.web_crawler import get_rendered_html, find_tags
-from ..xss import eco_test
