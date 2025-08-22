@@ -5,6 +5,7 @@ from pyngrok import ngrok
 import time
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 
 # Sistema de Tracking de Payloads
 payload_tracker = {
