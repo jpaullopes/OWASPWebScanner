@@ -1,7 +1,6 @@
 from src.modules.server_ouvinte import iniciar_servidor_ouvinte
 from pyngrok import ngrok
-import threading
-from src.modules.xss import get_rendered_html, find_tags, blind_xss_injection
+from src.modules.xss import get_rendered_html, find_tags, blind_xss_injection, eco_test
 
 # Configuração de Tags para encontrar campos de entrada
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
@@ -23,19 +22,14 @@ if driver:
     html = driver.page_source
     found_tags = find_tags(html, TAGS_TO_FIND)
     
-    # Filtra apenas os campos válidos (exemplo: campos de texto)
-    campos_validos = [
-        {'element': tag} for tag in found_tags
-        if tag.get('type') in ['text', 'search', 'email', 'url']
-    ]
-    
-    # Realiza a injeção de Blind XSS
-    injected_payloads = blind_xss_injection(campos_validos, driver, url_ouvinte)
-    
-    print("\n=== Payloads injetados ===")
-    for payload in injected_payloads:
-        print(f"Campo: {payload['field_name']} | Payload: {payload['payload']} | Status: {payload['status']}")
-    
+    # Teste de eco com os campos encontrados
+    eco_results = eco_test(found_tags, driver, "TEXTPASSIVE")
+    successful_results = [result for result in eco_results if result['status'] == 'success']
+
+    # Teste de Blind XSS com os campos encontrados pelo teste de eco que foram categorizadas como sucesso
+    blind_xss_results = blind_xss_injection(successful_results, driver, url_ouvinte)
+    print(blind_xss_results)
+
     driver.quit()
 
 # Mantém o servidor ouvinte ativo por um tempo para capturar requisições

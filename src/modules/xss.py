@@ -32,7 +32,7 @@ def find_tags(html_content, tags):
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
     chrome_options = Options()
-    #chrome_options.add_argument("--headless")  
+    chrome_options.add_argument("--headless")  
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
@@ -353,7 +353,6 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     try:
                         current_url = driver.current_url
                         if current_url != original_url:
-                            print(f"[*] Página mudou após injeção, voltando...")
                             driver.get(original_url)
                             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
                             time.sleep(2)
@@ -376,15 +375,3 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
         print(f"An error occurred during blind XSS injection testing: {e}")
         return []
 
-# Exemplo de uso - Teste na página de BUSCA onde existe o campo mat-input-1
-driver = get_rendered_html("http://localhost:3000/#/login")
-if driver:
-    html = driver.page_source
-    found_tags = find_tags(html, TAGS_TO_FIND)
-    
-    # Teste de eco com os campos encontrados
-    eco_results = eco_test(found_tags, driver, "test_eco")
-    successful_results = [result for result in eco_results if result['status'] == 'success']
-    
-    print(eco_results)
-    driver.quit()
