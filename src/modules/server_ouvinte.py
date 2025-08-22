@@ -102,16 +102,6 @@ def iniciar_servidor_ouvinte(porta):
     thread_servidor.daemon = True
     thread_servidor.start()
 
-
-# Executando a criação do servidor
-porta = 8000
-iniciar_servidor_ouvinte(porta)
-# Criando túnel ngrok para expor o servidor local
-ngrok_tunnel = ngrok.connect(porta)
-print(ngrok_tunnel)
-time.sleep(30)
-ngrok.disconnect(ngrok_tunnel.public_url)
-
 def gerar_id_payload():
     """Gera um ID único para cada payload injetado."""
     return str(uuid.uuid4())[:8] 
