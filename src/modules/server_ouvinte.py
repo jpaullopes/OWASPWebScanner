@@ -3,6 +3,14 @@ import socketserver
 import threading
 from pyngrok import ngrok
 import time
+import uuid
+from datetime import datetime
+
+# Sistema de Tracking de Payloads
+payload_tracker = {
+    'injected': {},  # Payloads injetados: {id: {info}}
+    'received': {}   # Callbacks recebidos: {id: {info}}
+}
 
 
 # Ela define o que acontece quando um pedido do nosso payload chega.
