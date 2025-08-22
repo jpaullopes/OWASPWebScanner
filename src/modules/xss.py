@@ -371,10 +371,6 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     
                     print(f"[+] Payload {payload_id} injetado no campo {field_name}")
                     
-                except Exception as e:
-                    print(f"[!] Falha ao injetar payload no campo {field_name}: {e}")
-                    continue
-                    
                     # Verifica se mudou de página após a injeção
                     try:
                         current_url = driver.current_url
@@ -391,6 +387,12 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                                 pass
                     except Exception as nav_error:
                         print(f"[!] Erro ao navegar de volta: {nav_error}")
+                    
+                except Exception as e:
+                    print(f"[!] Falha ao injetar payload no campo {field_name}: {e}")
+                    continue
+                except Exception as nav_error:
+                    print(f"[!] Erro ao navegar de volta: {nav_error}")
                         
                 except Exception as e:
                     print(f"Falha ao injetar blind XSS no campo: {e}")
