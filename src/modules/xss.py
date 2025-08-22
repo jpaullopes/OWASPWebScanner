@@ -231,11 +231,24 @@ def eco_test(lista, driver, test_text):
                     except:
                         input_field.send_keys(Keys.RETURN)
                 
+                # Aguarda um pouco para a página processar
+                time.sleep(2)
+                
+                # Verifica se mudou de página após o teste
+                current_url = driver.current_url
+                eco_result = False
+                
+                if current_url != original_url:
+                    eco_result = eco_verificator(driver, test_text)
+                else:
+                    # Se não mudou, verifica na página atual
+                    eco_result = eco_verificator(driver, test_text)
+                
                 results.append({
                     'element': element,
                     'status': 'success',
                     'payload_sent': test_text,
-                    'eco_text': eco_verificator(driver, test_text)
+                    'eco_text': eco_result,
                 })
                 
         except Exception as e:
@@ -245,7 +258,7 @@ def eco_test(lista, driver, test_text):
                 'error': str(e)
             })
         
-        # Verifica se mudou de página após o teste
+        # Volta para a página original se necessário
         try:
             current_url = driver.current_url
             if current_url != original_url:
@@ -374,7 +387,4 @@ if driver:
     successful_results = [result for result in eco_results if result['status'] == 'success']
     
     print(eco_results)
-    print(successful_results)
-
-
     driver.quit()
