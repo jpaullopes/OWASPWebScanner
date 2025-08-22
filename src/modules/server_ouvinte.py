@@ -50,3 +50,19 @@ def gerar_id_payload():
     """Gera um ID único para cada payload injetado."""
     return str(uuid.uuid4())[:8] 
 
+def registrar_payload_injetado(campo_id, campo_name, payload, url_origem):
+    """Registra um payload que foi injetado em um campo."""
+    payload_id = gerar_id_payload()
+    
+    payload_tracker['injected'][payload_id] = {
+        'id': payload_id,
+        'timestamp': datetime.now().isoformat(),
+        'campo_id': campo_id,
+        'campo_name': campo_name,
+        'payload': payload,
+        'url_origem': url_origem,
+        'status': 'injected'
+    }
+    
+    print(f"[+] Payload registrado: {payload_id} no campo {campo_name or campo_id}")
+    return payload_id
