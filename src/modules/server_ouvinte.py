@@ -66,3 +66,21 @@ def registrar_payload_injetado(campo_id, campo_name, payload, url_origem):
     
     print(f"[+] Payload registrado: {payload_id} no campo {campo_name or campo_id}")
     return payload_id
+
+def obter_payloads_injetados():
+    """Retorna todos os payloads que foram injetados."""
+    return payload_tracker['injected'].copy()
+
+def obter_payloads_recebidos():
+    """Retorna todos os callbacks que foram recebidos."""
+    return payload_tracker['received'].copy()
+
+def obter_status_tracking():
+    """Retorna estatísticas do tracking."""
+    total_injetados = len(payload_tracker['injected'])
+    total_recebidos = len(payload_tracker['received'])
+    
+    return {
+        'total_injetados': total_injetados,
+        'total_recebidos': total_recebidos
+        }
