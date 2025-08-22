@@ -156,8 +156,11 @@ def get_rendered_html(url):
 
 def eco_test(lista, driver, test_text):
     """Função de teste para enviar um texto nos campos de input."""
-
+    
+    # Salva a URL original para voltar depois de cada teste
+    original_url = driver.current_url
     results = []
+    
     for element in lista:
         try:
             input_field = None
@@ -241,6 +244,37 @@ def eco_test(lista, driver, test_text):
                 'status': 'failed',
                 'error': str(e)
             })
+        
+        # Verifica se mudou de página após o teste
+        try:
+            current_url = driver.current_url
+            if current_url != original_url:
+                driver.get(original_url)
+                
+                # Aguarda a página carregar e tenta fechar modais novamente
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                time.sleep(2)
+                
+                # Tenta fechar modal que pode aparecer ao voltar
+                try:
+                    close_button = driver.find_element(By.XPATH, "//button[contains(@class, 'close') or contains(@aria-label, 'close') or text()='×']")
+                    close_button.click()
+                except:
+                    try:
+                        dismiss_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Dismiss') or contains(text(), 'OK')]")
+                        dismiss_button.click()
+                    except:
+                        try:
+                            backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
+                            backdrop.click()
+                        except:
+                            try:
+                                driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+                            except:
+                                pass
+        except Exception as e:
+            print(f"Erro ao verificar/voltar página: {e}")
+    
     return results
 
 def eco_verificator(driver, eco_text):
@@ -271,6 +305,9 @@ def build_payloads(url_ouvinte):
 
 def blind_xss_injection(campos_validos, driver, url_ouvinte):
     """Injeta payloads blind XSS - estratégia 'disparar e esquecer'"""
+    
+    # Salva a URL original para voltar depois de cada injeção
+    original_url = driver.current_url
     injected_payloads = []
     
     try:
@@ -297,7 +334,26 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                         'payload': payload,
                         'field_name': field_name,
                         'status': 'injected'
-                    })              
+                    })
+                    
+                    # Verifica se mudou de página após a injeção
+                    try:
+                        current_url = driver.current_url
+                        if current_url != original_url:
+                            print(f"[*] Página mudou após injeção, voltando...")
+                            driver.get(original_url)
+                            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                            time.sleep(2)
+                            
+                            # Fecha modais se necessário
+                            try:
+                                backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
+                                backdrop.click()
+                            except:
+                                pass
+                    except Exception as nav_error:
+                        print(f"[!] Erro ao navegar de volta: {nav_error}")
+                        
                 except Exception as e:
                     print(f"Falha ao injetar blind XSS no campo: {e}")
                     continue
