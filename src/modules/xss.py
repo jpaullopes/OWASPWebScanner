@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+import time
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
@@ -27,25 +28,6 @@ def find_tags(html_content, tags):
     except Exception as e:
         print(f"An error occurred while parsing HTML: {e}")
         return []
-
-def activate_search_field(driver):
-    """Ativa o campo de busca clicando no ícone da lupa"""
-    try:
-        # Passo 1: Encontrar o ícone da lupa com texto "search"
-        search_icon = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//mat-icon[text()='search']"))
-        )
-        # Passo 2: Clicar no ícone
-        search_icon.click()
-        # Passo 3: Esperar pela barra de pesquisa ficar visível e clicável
-        search_input = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.ID, "mat-input-1"))
-        )
-        return True
-        
-    except Exception as e:
-        print(f"Erro ao ativar campo de busca: {e}")
-        return False
 
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
@@ -82,6 +64,89 @@ def get_rendered_html(url):
                         WebDriverWait(driver, 5).until(EC.invisibility_of_element(backdrop))
                     except:
                         pass
+        try:
+            search_icon = None
+            
+            # Estratégia 1: mat-icon com classe mat-search_icon-search 
+            try:
+                search_icon = WebDriverWait(driver, 3).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-icon[class*='mat-search_icon-search']"))
+                )
+            except:
+                pass
+            
+            # Estratégia 2: mat-icon que contém texto "search" 
+            if not search_icon:
+                try:
+                    search_icon = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable((By.XPATH, "//mat-icon[contains(text(), 'search')]"))
+                    )
+                except:
+                    pass
+            
+            # Estratégia 3: qualquer mat-icon na barra superior (toolbar)
+            if not search_icon:
+                try:
+                    search_icon = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-toolbar mat-icon"))
+                    )
+                except:
+                    pass
+            
+            # Estratégia 4: busca por data-mat-icon-type="font"
+            if not search_icon:
+                try:
+                    search_icon = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-icon[data-mat-icon-type='font']"))
+                    )
+                except:
+                    pass
+            
+            # Estratégia 5: JavaScript para forçar clique em todos os mat-icons até funcionar
+            if not search_icon:
+                try:
+                    driver.execute_script("""
+                        const icons = document.querySelectorAll('mat-icon');
+                        for (let icon of icons) {
+                            if (icon.textContent.includes('search') || 
+                                icon.className.includes('search') ||
+                                icon.getAttribute('data-mat-icon-type') === 'font') {
+                                icon.click();
+                                break;
+                            }
+                        }
+                    """)
+                    time.sleep(2)
+                except:
+                    pass
+            
+            # Se encontrou elemento, clica normalmente
+            if search_icon:
+                search_icon.click()
+                time.sleep(1)
+            
+            # Verifica se o campo ficou ativo
+            try:
+                WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.ID, "mat-input-1"))
+                )
+            except:
+                # Tenta forçar ativação via JavaScript
+                try:
+                    driver.execute_script("""
+                        const searchField = document.getElementById('mat-input-1');
+                        if (searchField) {
+                            searchField.focus();
+                            searchField.click();
+                            searchField.disabled = false;
+                        }
+                    """)
+                    time.sleep(1)
+                except:
+                    pass
+            
+        except Exception as e:
+            print(f"Erro ao ativar busca: {e}")
               
         return driver
     except Exception as e:
@@ -100,22 +165,52 @@ def eco_test(lista, driver, test_text):
             if element.get('type') in ['checkbox', 'radio', 'submit', 'button']:
                 continue
             
-            # Tenta encontrar por ID primeiro
-            if element['id']:
+            # Tratamento especial para o campo mat-input-1 (campo de busca)
+            if element.get('id') == 'mat-input-1':
                 try:
-                    input_field = driver.find_element(By.ID, element['id'])
-                    input_field.click()
-                    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
-                except:
-                    pass
-            #  Tenta encontrar por NAME
-            if not input_field and element['name']:
-                try:
-                    input_field = driver.find_element(By.NAME, element['name'])
-                    input_field.click()
-                    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
-                except:
-                    pass
+                    # Força a ativação da barra de pesquisa novamente
+                    try:
+                        search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
+                        search_icon.click()
+                        time.sleep(1)
+                    except:
+                        pass
+                    
+                    # Aguarda específicamente até este campo ficar ativo
+                    input_field = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.ID, "mat-input-1"))
+                    )
+                    
+                    # Força o foco usando JavaScript
+                    driver.execute_script("arguments[0].focus();", input_field)
+                    driver.execute_script("arguments[0].click();", input_field)
+                    time.sleep(0.5)
+                    
+                except Exception as e:
+                    results.append({
+                        'element': element,
+                        'status': 'failed',
+                        'error': f'Campo de busca mat-input-1 não pode ser ativado: {str(e)}'
+                    })
+                    continue
+            else:
+                # Tratamento normal para outros campos
+                # Tenta encontrar por ID primeiro
+                if element['id']:
+                    try:
+                        input_field = driver.find_element(By.ID, element['id'])
+                        input_field.click()
+                        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
+                    except:
+                        pass
+                #  Tenta encontrar por NAME
+                if not input_field and element['name']:
+                    try:
+                        input_field = driver.find_element(By.NAME, element['name'])
+                        input_field.click()
+                        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
+                    except:
+                        pass
                     
             if input_field:
                 input_field.clear() 
@@ -212,4 +307,18 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
         print(f"An error occurred during blind XSS injection testing: {e}")
         return []
 
+# Exemplo de uso - Teste na página de BUSCA onde existe o campo mat-input-1
+driver = get_rendered_html("http://localhost:3000/#/login")
+if driver:
+    html = driver.page_source
+    found_tags = find_tags(html, TAGS_TO_FIND)
+    
+    # Teste de eco com os campos encontrados
+    eco_results = eco_test(found_tags, driver, "test_eco")
+    successful_results = [result for result in eco_results if result['status'] == 'success']
+    
+    print(eco_results)
+    print(successful_results)
 
+
+    driver.quit()

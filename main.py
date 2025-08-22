@@ -46,3 +46,6 @@ try:
 except KeyboardInterrupt:
     print("[*] Encerrando servidor ouvinte...")
     ngrok.disconnect(url_ouvinte)
+
+
+    
