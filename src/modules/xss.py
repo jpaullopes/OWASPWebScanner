@@ -391,15 +391,10 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                 except Exception as e:
                     print(f"[!] Falha ao injetar payload no campo {field_name}: {e}")
                     continue
-                except Exception as nav_error:
-                    print(f"[!] Erro ao navegar de volta: {nav_error}")
-                        
-                except Exception as e:
-                    print(f"Falha ao injetar blind XSS no campo: {e}")
-                    continue
-        
-        return injected_payloads
+
     except Exception as e:
         print(f"An error occurred during blind XSS injection testing: {e}")
         return []
+
+    return injected_payloads
 
