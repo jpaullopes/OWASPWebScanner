@@ -377,11 +377,23 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                             print(f"[!] Campo de busca mat-input-1 não pode ser ativado: {str(e)}")
                             continue
                     else:
-                        # Para outros campos, encontra normalmente
+                        # Para outros campos, usa a mesma lógica do eco_test
                         if element['id']:
-                            input_field = driver.find_element(By.ID, element['id'])
-                        elif element['name']:
-                            input_field = driver.find_element(By.NAME, element['name'])
+                            try:
+                                input_field = driver.find_element(By.ID, element['id'])
+                                input_field.click()
+                                WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
+                            except:
+                                input_field = None
+                        
+                        # Se não funcionou por ID, tenta por NAME
+                        if not input_field and element['name']:
+                            try:
+                                input_field = driver.find_element(By.NAME, element['name'])
+                                input_field.click()
+                                WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
+                            except:
+                                input_field = None
                     
                     # Verifica se conseguiu encontrar/ativar o campo
                     if not input_field:
