@@ -45,3 +45,8 @@ ngrok_tunnel = ngrok.connect(porta)
 print(ngrok_tunnel)
 time.sleep(30)
 ngrok.disconnect(ngrok_tunnel.public_url)
+
+def gerar_id_payload():
+    """Gera um ID único para cada payload injetado."""
+    return str(uuid.uuid4())[:8] 
+
