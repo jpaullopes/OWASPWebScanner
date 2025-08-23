@@ -1,7 +1,7 @@
-from ..server_ouvinte import registrar_payload_injetado
-from ..xss import eco_test, activate_mat_input_field, find_field_element, submit_form, return_to_original_page
-from ..xss import build_payloads, get_payload_types
-from ...recon.web_crawler import get_rendered_html, find_tags
+from ..http_server import registrar_payload_injetado
+from .field_tester import eco_test, activate_mat_input_field, find_field_element, submit_form, return_to_original_page
+from .payload_builder import build_payloads, get_payload_types
+from ...recon.web_crawler import get_rendered_html, find_tags, page_reload
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -75,7 +75,7 @@ def blind_xss_injection(campos_validos, driver, url_ouvinte):
                         'status': 'injected'
                     })
                     
-                    print(f"[+] Payload {payload_id} ({payload_type}) injetado no campo {field_name}")
+                    print(f"Payload {payload_id} ({payload_type}) injetado no campo {field_name}")
                     
                     # Volta para a página original se necessário
                     return_to_original_page(driver, original_url)

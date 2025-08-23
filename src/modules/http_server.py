@@ -143,7 +143,6 @@ def obter_status_tracking():
         'total_injetados': total_injetados,
         'total_recebidos': total_recebidos,
         'total_executados': executados,
-        'taxa_sucesso': f"{(executados/total_injetados*100):.1f}%" if total_injetados > 0 else "0%"
     }
 
 def obter_payloads_executados():

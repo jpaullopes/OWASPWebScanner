@@ -31,7 +31,7 @@ def find_tags(html_content, tags):
 def setup_chrome_driver():
     """Configura e retorna um driver Chrome otimizado"""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  
+    #chrome_options.add_argument("--headless")  
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     return webdriver.Chrome(options=chrome_options)
@@ -61,6 +61,87 @@ def close_modals_and_popups(driver):
                 except:
                     pass
 
+def close_sidebar_generic(driver):
+    """Tenta fechar sidebars/menus laterais em sites diversos"""
+    print("Verificando e fechando sidebars...")
+    
+    sidebar_selectors = [
+        # OWASP Juice Shop específico
+        "mat-sidenav.mat-drawer-opened",
+        ".mat-drawer-opened",
+        
+        # Sidebars genéricas
+        ".sidebar.open",
+        ".side-menu.open", 
+        ".drawer.open",
+        ".offcanvas.show",
+        ".nav-drawer.open",
+        ".side-panel.active",
+        
+        # Bootstrap e frameworks populares
+        ".navbar-collapse.show",
+        ".navbar-toggler[aria-expanded='true']",
+        ".offcanvas-backdrop",
+        
+        # Angular Material
+        ".mat-drawer-backdrop",
+        ".cdk-overlay-backdrop",
+        
+        # Outros padrões comuns
+        "[class*='sidebar'][class*='open']",
+        "[class*='menu'][class*='open']",
+        "[class*='drawer'][class*='open']"
+    ]
+    
+    for selector in sidebar_selectors:
+        try:
+            sidebar = driver.find_element(By.CSS_SELECTOR, selector)
+            if sidebar.is_displayed():
+                print(f"Encontrou sidebar ativa: {selector}")
+                
+                # Tenta diferentes formas de fechar
+                # 1. Clica no próprio sidebar (alguns fecham assim)
+                try:
+                    sidebar.click()
+                    time.sleep(0.5)
+                    if not sidebar.is_displayed():
+                        print("Sidebar fechada clicando nela")
+                        continue
+                except:
+                    pass
+                
+                # 2. Procura botão de fechar dentro da sidebar
+                try:
+                    close_btn = sidebar.find_element(By.CSS_SELECTOR, 
+                        "button[aria-label*='close'], button[aria-label*='Close'], .close, [class*='close']")
+                    close_btn.click()
+                    print("Sidebar fechada via botão close")
+                    time.sleep(0.5)
+                    continue
+                except:
+                    pass
+                
+                # 3. Clica fora da sidebar (backdrop)
+                try:
+                    driver.execute_script("arguments[0].click();", 
+                        driver.find_element(By.TAG_NAME, "body"))
+                    time.sleep(0.5)
+                    if not sidebar.is_displayed():
+                        print("Sidebar fechada clicando fora")
+                        continue
+                except:
+                    pass
+                    
+        except:
+            continue
+    
+    # Pressiona ESC como último recurso
+    try:
+        driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+        time.sleep(0.5)
+    except:
+        pass
+
 def activate_search_bar(driver):
     """Ativa a barra de pesquisa usando múltiplas estratégias"""
     print("Procurando o ícone da lupa")
@@ -76,24 +157,24 @@ def activate_search_bar(driver):
         pass
     
     # Estratégia 2: mat-icon que contém texto "search" 
-    if not search_icon:
-        try:
-            search_icon = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.XPATH, "//mat-icon[contains(text(), 'search')]"))
-            )
-            print("Encontrou mat-icon com texto 'search'")
-        except:
-            pass
+#    if not search_icon:
+#       try:
+#            search_icon = WebDriverWait(driver, 3).until(
+#                EC.element_to_be_clickable((By.XPATH, "//mat-icon[contains(text(), 'search')]"))
+#            )
+#            print("Encontrou mat-icon com texto 'search'")
+#        except:
+#            pass
     
     # Estratégia 3: qualquer mat-icon na barra superior (toolbar)
-    if not search_icon:
-        try:
-            search_icon = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-toolbar mat-icon"))
-            )
-            print("Encontrou mat-icon genérico na toolbar")
-        except:
-            pass
+#    if not search_icon:
+#        try:
+#            search_icon = WebDriverWait(driver, 3).until(
+#                EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-toolbar mat-icon"))
+#            )
+#            print("Encontrou mat-icon genérico na toolbar")
+#        except:
+#            pass
     
     # Estratégia 4: busca por data-mat-icon-type="font"
     if not search_icon:
@@ -142,3 +223,13 @@ def get_rendered_html(url):
         print(f"An error occurred while loading the page: {e}")
         driver.quit()
         return None
+
+def page_reload(driver, url_teste):
+    """Recarrega a página atual para limpar estado."""
+    try:
+        driver.quit()
+        driver = get_rendered_html(url_teste)
+        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        return driver
+    except Exception as e:
+        print(f"Erro ao recarregar página: {e}")

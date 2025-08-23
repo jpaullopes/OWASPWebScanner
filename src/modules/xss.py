@@ -6,7 +6,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import time
-from .server_ouvinte import registrar_payload_injetado
+from .http_server import registrar_payload_injetado
 
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 

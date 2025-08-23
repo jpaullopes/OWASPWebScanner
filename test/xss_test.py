@@ -1,7 +1,16 @@
-from src.modules.server_ouvinte import iniciar_servidor_ouvinte, obter_status_tracking, obter_relatorio_detalhado,obter_payloads_executados,limpar_tracking
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.modules.http_server import iniciar_servidor_ouvinte, obter_status_tracking, obter_relatorio_detalhado, obter_payloads_executados, limpar_tracking
 from pyngrok import ngrok
-from src.modules.xss import get_rendered_html, find_tags, blind_xss_injection, eco_test
+from src.recon.web_crawler import get_rendered_html, find_tags
+from src.modules.xss.field_tester import eco_test
+from src.modules.xss.xss import blind_xss_injection
 import time
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 # Configuração de Tags para encontrar campos de entrada
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
@@ -53,9 +62,6 @@ if driver:
             print(f"{i}. {field_name} (tipo: {element.get('type', 'text')})")
         print()
         
-        # Recarregar a pagina para a url de teste para evitar problemas de estado
-        driver.quit()
-        driver = get_rendered_html(url_teste)
         # Teste de Blind XSS com os campos validados
         print("Iniciando injeção de payloads Blind XSS")
         blind_xss_results = blind_xss_injection(successful_results, driver, url_ouvinte)
@@ -77,7 +83,6 @@ if driver:
         print(f" Payloads injetados: {relatorio['resumo']['total_injetados']}")
         print(f" Callbacks recebidos: {relatorio['resumo']['total_recebidos']}")
         print(f" Payloads executados: {relatorio['resumo']['total_executados']}")
-        print(f" Taxa de sucesso: {relatorio['resumo']['taxa_sucesso']}")
         print()
         
         # Mostra campos vulneráveis
