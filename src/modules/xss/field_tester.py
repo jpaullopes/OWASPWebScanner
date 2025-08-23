@@ -1,14 +1,11 @@
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-import time
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+import asyncio
 
-def eco_verificator(driver, eco_text):
+async def eco_verificator(page, eco_text):
     """Verifica se o texto enviado foi processado corretamente."""
     try:
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        body_text = driver.find_element(By.TAG_NAME, "body").text
+        await page.wait_for_load_state("domcontentloaded", timeout=10000)
+        body_text = await page.locator("body").inner_text()
         if eco_text in body_text:
             return True
         return False
@@ -16,135 +13,111 @@ def eco_verificator(driver, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
-def activate_mat_input_field(driver, field_id="mat-input-1"):
-    """Ativa especificamente o campo mat-input-1 (barra de pesquisa)"""
+async def activate_mat_input_field(page, field_id="mat-input-1"):
+    """Ativa especificamente o campo mat-input-1 (barra de pesquisa) usando Playwright"""
     try:
-        # Múltiplas estratégias para encontrar o ícone de busca
-        search_icon = None
+        # Usando o mesmo locator da função activate_search_bar do web_crawler
+        search_icon_locator = page.locator("mat-icon[class*='mat-search_icon-search'], mat-icon[data-mat-icon-type='font']")
         
-        # Estratégia 1: mat-icon com classe mat-search_icon-search 
-        try:
-            search_icon = WebDriverWait(driver, 3).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-icon[class*='mat-search_icon-search']"))
-            )
-        except:
-            pass
+        # Clica no ícone de busca
+        await search_icon_locator.first.click(timeout=5000)
+        print("Ícone de busca clicado")
         
-        # Estratégia 2: mat-icon que contém texto "search" 
-        if not search_icon:
-            try:
-                search_icon = WebDriverWait(driver, 3).until(
-                    EC.element_to_be_clickable((By.XPATH, "//mat-icon[contains(text(), 'search')]"))
-                )
-            except:
-                pass
+        # Aguarda o campo de input ficar disponível e editável
+        input_field = page.locator(f"#{field_id}")
+        await input_field.wait_for(state="visible", timeout=10000)
+        await input_field.wait_for(state="editable", timeout=10000)
         
-        # Estratégia 3: qualquer mat-icon na barra superior (toolbar)
-        if not search_icon:
-            try:
-                search_icon = WebDriverWait(driver, 3).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "mat-toolbar mat-icon"))
-                )
-            except:
-                pass
+        # Foca no campo
+        await input_field.focus()
+        await input_field.click()
+        await page.wait_for_timeout(500)
         
-        # Se encontrou, clica e aguarda
-        if search_icon:
-            search_icon.click()
-            time.sleep(1)
-            
-            # Aguarda o campo ficar ativo
-            input_field = WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.ID, field_id))
-            )
-            
-            # Força o foco usando JavaScript
-            driver.execute_script("arguments[0].focus();", input_field)
-            driver.execute_script("arguments[0].click();", input_field)
-            time.sleep(0.5)
-            
-            return input_field
-        else:
-            return None
-            
+        return input_field
+        
+    except PlaywrightTimeoutError:
+        print(f"Erro ao ativar campo {field_id}: timeout")
+        return None
     except Exception as e:
         print(f"Erro ao ativar campo {field_id}: {e}")
         return None
 
-def find_field_element(driver, element):
-    """Encontra um elemento de campo usando diferentes estratégias"""
+async def find_field_element(page, element):
+    """Encontra um elemento de campo usando diferentes estratégias com Playwright"""
     input_field = None
     
     # Tenta encontrar por ID primeiro
     if element['id']:
         try:
-            input_field = driver.find_element(By.ID, element['id'])
-            input_field.click()
-            WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.ID, element['id'])))
-        except:
+            input_field = page.locator(f"#{element['id']}")
+            await input_field.click(timeout=5000)
+            await input_field.wait_for(state="editable", timeout=5000)
+            return input_field
+        except PlaywrightTimeoutError:
             input_field = None
     
     # Se não funcionou por ID, tenta por NAME
     if not input_field and element['name']:
         try:
-            input_field = driver.find_element(By.NAME, element['name'])
-            input_field.click()
-            WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.NAME, element['name'])))
-        except:
+            input_field = page.locator(f"[name='{element['name']}']")
+            await input_field.click(timeout=5000)
+            await input_field.wait_for(state="editable", timeout=5000)
+            return input_field
+        except PlaywrightTimeoutError:
             input_field = None
     
     return input_field
 
-def submit_form(driver, input_field):
-    """Submete o formulário usando diferentes estratégias"""
+async def submit_form(page, input_field):
+    """Submete o formulário usando diferentes estratégias com Playwright"""
     try:
-        # Procura por submit
-        submit_button = driver.find_element(By.XPATH, "//button[@type='submit']")
-        submit_button.click()
-    except:
-        # Procura por login 
+        # Procura por botão submit
+        submit_button = page.locator("button[type='submit']")
+        await submit_button.click(timeout=3000)
+    except PlaywrightTimeoutError:
         try:
-            login_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Log in')]")
-            login_button.click()
-        except:
-            input_field.send_keys(Keys.RETURN)
+            # Procura por botão de login 
+            login_button = page.locator("button:has-text('Log in')")
+            await login_button.click(timeout=3000)
+        except PlaywrightTimeoutError:
+            # Pressiona Enter no campo
+            await input_field.press("Enter")
 
-def return_to_original_page(driver, original_url):
-    """Volta para a página original e fecha modais"""
+async def return_to_original_page(page, original_url):
+    """Volta para a página original e fecha modais usando Playwright"""
     try:
-        current_url = driver.current_url
+        current_url = page.url
         if current_url != original_url:
-            driver.get(original_url)
+            await page.goto(original_url, wait_until="domcontentloaded", timeout=10000)
             
             # Aguarda a página carregar e tenta fechar modais novamente
-            WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            time.sleep(2)
+            await page.wait_for_timeout(2000)
             
             # Tenta fechar modal que pode aparecer ao voltar
             try:
-                close_button = driver.find_element(By.XPATH, "//button[contains(@class, 'close') or contains(@aria-label, 'close') or text()='×']")
-                close_button.click()
-            except:
+                close_button = page.locator("button[class*='close'], button[aria-label*='close'], button:has-text('×')")
+                await close_button.first.click(timeout=2000)
+            except PlaywrightTimeoutError:
                 try:
-                    dismiss_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Dismiss') or contains(text(), 'OK')]")
-                    dismiss_button.click()
-                except:
+                    dismiss_button = page.locator("button:has-text('Dismiss'), button:has-text('OK')")
+                    await dismiss_button.first.click(timeout=2000)
+                except PlaywrightTimeoutError:
                     try:
-                        backdrop = driver.find_element(By.CLASS_NAME, "cdk-overlay-backdrop")
-                        backdrop.click()
-                    except:
+                        backdrop = page.locator(".cdk-overlay-backdrop")
+                        await backdrop.click(timeout=2000)
+                    except PlaywrightTimeoutError:
                         try:
-                            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
-                        except:
+                            await page.keyboard.press("Escape")
+                        except Exception:
                             pass
     except Exception as e:
         print(f"Erro ao verificar/voltar página: {e}")
 
-def eco_test(lista, driver, test_text):
-    """Função de teste para enviar um texto nos campos de input."""
+async def eco_test(lista, page, test_text):
+    """Função de teste para enviar um texto nos campos de input usando Playwright."""
     
     # Salva a URL original para voltar depois de cada teste
-    original_url = driver.current_url
+    original_url = page.url
     results = []
     
     for element in lista:
@@ -156,7 +129,7 @@ def eco_test(lista, driver, test_text):
             
             # Tratamento especial para o campo mat-input-1 (campo de busca)
             if element.get('id') == 'mat-input-1':
-                input_field = activate_mat_input_field(driver, 'mat-input-1')
+                input_field = await activate_mat_input_field(page, 'mat-input-1')
                 if not input_field:
                     results.append({
                         'element': element,
@@ -166,27 +139,27 @@ def eco_test(lista, driver, test_text):
                     continue
             else:
                 # Tratamento normal para outros campos
-                input_field = find_field_element(driver, element)
+                input_field = await find_field_element(page, element)
                     
             if input_field:
-                input_field.clear() 
-                input_field.send_keys(test_text)
+                await input_field.clear() 
+                await input_field.fill(test_text)
 
                 # Submete o formulário
-                submit_form(driver, input_field)
+                await submit_form(page, input_field)
                 
                 # Aguarda um pouco para a página processar
-                time.sleep(2)
+                await page.wait_for_timeout(2000)
                 
                 # Verifica se mudou de página após o teste
-                current_url = driver.current_url
+                current_url = page.url
                 eco_result = False
                 
                 if current_url != original_url:
-                    eco_result = eco_verificator(driver, test_text)
+                    eco_result = await eco_verificator(page, test_text)
                 else:
                     # Se não mudou, verifica na página atual
-                    eco_result = eco_verificator(driver, test_text)
+                    eco_result = await eco_verificator(page, test_text)
                 
                 results.append({
                     'element': element,
@@ -203,6 +176,6 @@ def eco_test(lista, driver, test_text):
             })
         
         # Volta para a página original se necessário
-        return_to_original_page(driver, original_url)
+        await return_to_original_page(page, original_url)
     
     return results
