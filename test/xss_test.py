@@ -1,139 +1,83 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.modules.http_server import iniciar_servidor_ouvinte, obter_status_tracking, obter_relatorio_detalhado, obter_payloads_executados, limpar_tracking
-from pyngrok import ngrok
-from src.recon.web_crawler import get_rendered_html, find_tags
+import asyncio
+from src.recon.web_crawler import get_rendered_page, find_tags
 from src.modules.xss.field_tester import eco_test
 from src.modules.xss.xss import blind_xss_injection
+from src.modules.http_server import iniciar_servidor_ouvinte, obter_relatorio_detalhado
+from playwright.async_api import async_playwright
+import threading
 import time
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
 
-# Configuração de Tags para encontrar campos de entrada
-TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
+# --- Configurações ---
+URL_ALVO = "http://localhost:3000/#/search"
+TAGS_PARA_BUSCAR = ['input', 'textarea', 'select']
+TEXTO_ECO_TEST = "TEXTO!@#$%"
+PORTA_OUVINTE = 8000
+URL_OUVINTE = f"http://localhost:{PORTA_OUVINTE}" 
 
-# Configurações do servidor ouvinte
-porta = 8000
-
-print("OWASP WEB SCANNER - BLIND XSS TESTER")
-
-# Inicia o servidor ouvinte em uma thread separada
-print("Iniciando servidor ouvinte")
-iniciar_servidor_ouvinte(porta)
-
-# Cria o túnel ngrok para expor o servidor local
-#print("Criando túnel ngrok")
-#ngrok_tunnel = ngrok.connect(porta)
-url_ouvinte = f'http://localhost:{porta}'
-print(f"Servidor ouvinte exposto em: {url_ouvinte}")
-print()
-
-# Limpa dados anteriores de tracking
-limpar_tracking()
-
-# Exemplo de uso do Blind XSS
-print("Iniciando teste de Blind XSS")
-# Url de teste
-url_teste = "http://localhost:3000/#/login"  
-driver = get_rendered_html(url_teste)
-if driver:
-    print("Página carregada com sucesso")
+async def main():
+    """Função principal para orquestrar o scanner."""
+    page = None
+    browser = None
     
-    # Extrai campos da página
-    html = driver.page_source
-    found_tags = find_tags(html, TAGS_TO_FIND)
-    print(f"{len(found_tags)} campos encontrados na página")
-    
-    # Teste de eco com os campos encontrados
-    print("Executando teste de eco para validar campos")
-    eco_results = eco_test(found_tags, driver, "TEXTPASSIVE")
-    successful_results = [result for result in eco_results if result['status'] == 'success']
-    print(f"{len(successful_results)} campos válidos identificados")
-    
-    if successful_results:
-        # Mostra campos válidos
-        print("\nCAMPOS VÁLIDOS PARA TESTE:")
-        for i, result in enumerate(successful_results, 1):
-            element = result['element']
-            field_name = element.get('name') or element.get('id', 'sem-nome')
-            print(f"{i}. {field_name} (tipo: {element.get('type', 'text')})")
-        print()
-        
-        # Teste de Blind XSS com os campos validados
-        print("Iniciando injeção de payloads Blind XSS")
-        blind_xss_results = blind_xss_injection(successful_results, driver, url_ouvinte)
-        
-        # Mostra resultados imediatos
-        print(f"{len(blind_xss_results)} payloads injetados com sucesso")
-        
-        # Aguarda um tempo para possíveis callbacks
-        print("Aguardando callbacks de Blind XSS")
-        print("Aguardando 30 segundos para detectar execuções")
-        
-        time.sleep(30)
+    try:
+        # 1. Iniciar o servidor ouvinte em uma thread separada
+        iniciar_servidor_ouvinte(PORTA_OUVINTE)
+        print(f"Servidor ouvinte iniciado em {URL_OUVINTE}")
+        time.sleep(1) # Dá um tempo para o servidor iniciar
 
-        print("RELATÓRIO FINAL DE BLIND XSS")
-        # Obtém relatório detalhado
+        # 2. Iniciar o Playwright e navegar para a página
+        async with async_playwright() as p:
+            page, browser = await get_rendered_page(p, URL_ALVO)
+            if not page:
+                print("Falha ao carregar a página. Encerrando.")
+                return
+
+            # 3. Extrair o HTML renderizado e encontrar campos
+            html_content = await page.content()
+            campos_encontrados = await find_tags(html_content, TAGS_PARA_BUSCAR)
+            print(f"Encontrados {len(campos_encontrados)} campos para teste.")
+
+            # 4. Executar o teste de eco para validar os campos
+            print("Executando teste de eco para validar campos...")
+            resultados_eco = await eco_test(campos_encontrados, page, TEXTO_ECO_TEST)
+            campos_validos = [res for res in resultados_eco if res.get('status') == 'success' and res.get('eco_text', False)]
+            print(f"Encontrados {len(campos_validos)} campos que refletem o input (vulneráveis a eco).")
+
+            # 5. Injetar payloads de Blind XSS
+            if campos_validos:
+                print("\n--- Iniciando injeção de Blind XSS ---")
+                injected_payloads = await blind_xss_injection(campos_validos, page, browser, URL_OUVINTE, URL_ALVO, p)
+                print(f"Total de {len(injected_payloads)} payloads injetados.")
+            else:
+                print("Nenhum campo válido para injeção de Blind XSS encontrado.")
+                print("Resultados do eco test:")
+                for res in resultados_eco:
+                    print(f"  - Status: {res.get('status')}, Eco: {res.get('eco_text')}, Erro: {res.get('error', 'N/A')}")
+
+            # 6. Aguardar um tempo para possíveis callbacks
+            print("\nAguardando 15 segundos por callbacks de Blind XSS...")
+            time.sleep(15)
+
+    except Exception as e:
+        print(f"Ocorreu um erro na execução principal: {e}")
+    
+    finally:
+        # 7. Gerar o relatório final
+        print("\n--- Relatório Final de Blind XSS ---")
         relatorio = obter_relatorio_detalhado()
-        
-        print(f"RESUMO:")
-        print(f" Payloads injetados: {relatorio['resumo']['total_injetados']}")
-        print(f" Callbacks recebidos: {relatorio['resumo']['total_recebidos']}")
-        print(f" Payloads executados: {relatorio['resumo']['total_executados']}")
-        print()
-        
-        # Mostra campos vulneráveis
-        if relatorio['campos_vulneraveis']:
-            print("CAMPOS VULNERÁVEIS A BLIND XSS:")
-            for campo in relatorio['campos_vulneraveis']:
-                print(f" {campo}")
-            print()
-        
-        # Mostra payloads executados
-        executados = relatorio['payloads_executados']
-        if executados:
-            print("PAYLOADS EXECUTADOS COM SUCESSO:")
-            for payload_id, info in executados.items():
-                print(f" {payload_id}: {info['campo_name']} ({info['payload']})")
-                print(f"     Executado em: {info.get('executed_at', 'N/A')}")
-            print()
+        if not relatorio['payloads_executados']:
+            print("Nenhum payload foi executado com sucesso.")
         else:
-            print("NENHUM PAYLOAD FOI EXECUTADO")
-            print(" Possíveis causas: CSP, filtros, campos não vulneráveis")
-            print()
-    
-    else:
-        print("Nenhum campo válido encontrado para teste")
-    
-    driver.quit()
-    print("Navegador fechado")
-
-else:
-    print("Erro ao carregar a página de teste")
-
-print("\nMantendo servidor ouvinte ativo para callbacks tardios")
-print("Pressione Ctrl+C para encerrar")
-
-# Mantém o servidor ouvinte ativo para capturar requisições tardias
-try:
-    while True:
-        time.sleep(5)
-        status = obter_status_tracking()
-        if status['total_executados'] > 0:
-            pass
+            print("Payloads executados com sucesso:")
+            for payload_id, info in relatorio['payloads_executados'].items():
+                print(f"  - ID: {payload_id}")
+                print(f"    Campo: {info['campo_name']} ({info['campo_id']})")
+                print(f"    URL: {info['url_origem']}")
+                print(f"    Executado em: {info['executed_at']}")
         
-except KeyboardInterrupt:
-    print("\nEncerrando servidor ouvinte")
-    
-    # Mostra relatório final antes de encerrar
-    final_status = obter_status_tracking()
-    if final_status['total_executados'] > 0:
-        print(f"RESULTADO FINAL: {final_status['total_executados']} payload(s) executado(s)")
-    #ngrok.disconnect(url_ouvinte)
-    print("Sistema encerrado")
+        if browser and browser.is_connected():
+            await browser.close()
+            print("\nNavegador fechado.")
 
 
-    
+asyncio.run(main())
