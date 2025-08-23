@@ -16,28 +16,60 @@ async def eco_verificator(page, eco_text):
 async def activate_mat_input_field(page, field_id="mat-input-1"):
     """Ativa especificamente o campo mat-input-1 (barra de pesquisa) usando Playwright"""
     try:
-        # Usando o mesmo locator da função activate_search_bar do web_crawler
-        search_icon_locator = page.locator("mat-icon[class*='mat-search_icon-search'], mat-icon[data-mat-icon-type='font']")
-        
-        # Clica no ícone de busca
-        await search_icon_locator.first.click(timeout=5000)
-        print("Ícone de busca clicado")
-        
-        # Aguarda o campo de input ficar disponível e editável
+        # PRIMEIRO: verifica se o campo já está ativo
         input_field = page.locator(f"#{field_id}")
-        await input_field.wait_for(state="visible", timeout=10000)
-        await input_field.wait_for(state="editable", timeout=10000)
         
-        # Foca no campo
-        await input_field.focus()
-        await input_field.click()
-        await page.wait_for_timeout(500)
+        # Se já está visível e editável, não precisa clicar no ícone novamente
+        if await input_field.is_visible() and await input_field.is_editable():
+            print(f"Campo {field_id} já está ativo, não precisa clicar no ícone")
+            await input_field.focus()
+            return input_field
         
-        return input_field
+        # Se está visível mas não editável, tenta focar
+        if await input_field.is_visible():
+            print(f"Campo {field_id} visível mas não editável, tentando focar")
+            await input_field.focus()
+            await input_field.click()
+            await page.wait_for_timeout(500)
+            
+            if await input_field.is_editable():
+                return input_field
         
-    except PlaywrightTimeoutError:
-        print(f"Erro ao ativar campo {field_id}: timeout")
+        # SOMENTE se não estiver visível, tenta clicar no ícone
+        print(f"Campo {field_id} não está ativo, tentando ativar via ícone")
+        search_selectors = [
+            "mat-icon.mat-search_icon-search",  # Classe específica do ícone correto
+            ".mat-search_icons mat-icon:has-text('search')",  # Container específico
+            "span.mat-search_icons mat-icon[class*='search']",  # Ainda mais específico
+        ]
+        
+        for selector in search_selectors:
+            try:
+                search_icon = page.locator(selector).first
+                if await search_icon.count() > 0:
+                    await search_icon.click(timeout=3000)
+                    print(f"Ícone de busca clicado com seletor: {selector}")
+                    
+                    # Aguarda o campo de input ficar disponível
+                    await input_field.wait_for(state="visible", timeout=5000)
+                    
+                    # Foca no campo
+                    await input_field.focus()
+                    await input_field.click()
+                    await page.wait_for_timeout(500)
+                    
+                    if await input_field.is_editable():
+                        return input_field
+                    else:
+                        await page.wait_for_timeout(1000)
+                        if await input_field.is_editable():
+                            return input_field
+            except PlaywrightTimeoutError:
+                continue
+        
+        print(f"Não foi possível ativar o campo {field_id}")
         return None
+        
     except Exception as e:
         print(f"Erro ao ativar campo {field_id}: {e}")
         return None
@@ -51,7 +83,7 @@ async def find_field_element(page, element):
         try:
             input_field = page.locator(f"#{element['id']}")
             await input_field.click(timeout=5000)
-            await input_field.wait_for(state="editable", timeout=5000)
+            await input_field.wait_for(state="visible", timeout=5000)
             return input_field
         except PlaywrightTimeoutError:
             input_field = None
@@ -61,7 +93,7 @@ async def find_field_element(page, element):
         try:
             input_field = page.locator(f"[name='{element['name']}']")
             await input_field.click(timeout=5000)
-            await input_field.wait_for(state="editable", timeout=5000)
+            await input_field.wait_for(state="visible", timeout=5000)
             return input_field
         except PlaywrightTimeoutError:
             input_field = None
@@ -71,17 +103,35 @@ async def find_field_element(page, element):
 async def submit_form(page, input_field):
     """Submete o formulário usando diferentes estratégias com Playwright"""
     try:
-        # Procura por botão submit
-        submit_button = page.locator("button[type='submit']")
+        # Procura por botão submit específico
+        submit_button = page.locator("button[type='submit']").first
         await submit_button.click(timeout=3000)
+        return
     except PlaywrightTimeoutError:
-        try:
-            # Procura por botão de login 
-            login_button = page.locator("button:has-text('Log in')")
-            await login_button.click(timeout=3000)
-        except PlaywrightTimeoutError:
-            # Pressiona Enter no campo
-            await input_field.press("Enter")
+        pass
+    
+    try:
+        # Procura por botão de login específico (primeiro encontrado)
+        login_button = page.locator("button:has-text('Log in')").first
+        await login_button.click(timeout=3000)
+        return
+    except PlaywrightTimeoutError:
+        pass
+    
+    try:
+        # Procura por botão com ID específico
+        login_btn = page.locator("#loginButton")
+        if await login_btn.count() > 0:
+            await login_btn.click(timeout=3000)
+            return
+    except PlaywrightTimeoutError:
+        pass
+    
+    # Como último recurso, pressiona Enter no campo
+    try:
+        await input_field.press("Enter")
+    except Exception:
+        pass
 
 async def return_to_original_page(page, original_url):
     """Volta para a página original e fecha modais usando Playwright"""
