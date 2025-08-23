@@ -8,7 +8,7 @@ import asyncio
 # Configurações padrão
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
-async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_original):
+async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_original, playwright_instance):
     """Injeta payloads blind XSS - estratégia 'disparar e esquecer' usando Playwright"""
     
     injected_payloads = []
@@ -27,7 +27,7 @@ async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_or
                 try:
                     # Antes de cada payload, recarrega completamente a página
                     print(f"Recarregando página para payload {payload_type} no campo {field_name}")
-                    page, browser = await page_reload(page, browser, url_original)
+                    page, browser = await page_reload(page, browser, url_original, playwright_instance)
                     if not page:
                         print("Falha ao recarregar a página")
                         continue
