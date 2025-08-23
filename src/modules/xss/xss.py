@@ -1,7 +1,7 @@
 from ..http_server import registrar_payload_injetado
 from .field_tester import eco_test, activate_mat_input_field, find_field_element, submit_form, return_to_original_page
 from .payload_builder import build_payloads, get_payload_types
-from ...recon.web_crawler import get_rendered_html, find_tags, page_reload
+from ...recon.web_crawler import get_rendered_html, find_tags, complete_session_reset
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
