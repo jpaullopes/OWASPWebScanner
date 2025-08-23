@@ -50,27 +50,43 @@ async def activate_search_bar(page):
     """Ativa a barra de pesquisa usando múltiplas estratégias com Playwright."""
     print("Procurando o ícone da lupa")
     
-    # O Playwright espera automaticamente, então o código é mais simples
-    search_icon_locator = page.locator("mat-icon[class*='mat-search_icon-search'], mat-icon[data-mat-icon-type='font']")
+    # Lista de seletores para tentar (do mais específico ao mais genérico)
+    search_selectors = [
+        "mat-icon[class*='mat-search_icon-search']",
+        "mat-icon[data-mat-icon-type='font']", 
+        "mat-icon:has-text('search')",
+        "mat-toolbar mat-icon",
+        "button[aria-label*='search' i]",
+        "button[title*='search' i]",
+        "[data-cy='search-button']",
+        ".mat-icon-button mat-icon",
+        "mat-icon[aria-label*='search' i]"
+    ]
     
-    try:
-        await search_icon_locator.first.click(timeout=5000)
-        print("Clicando na lupa")
-        
-        # Aguarda a barra de pesquisa (input) ficar visível e clicável
-        search_input = page.locator("#mat-input-1")
-        await search_input.wait_for(state="visible", timeout=10000)
-        await search_input.wait_for(state="editable", timeout=10000)
-        
-        print("Barra de pesquisa ativada!")
-        await page.wait_for_timeout(1000) # Pequena pausa para garantir a estabilização da UI
-        return True
-    except PlaywrightTimeoutError:
-        print("Nenhum ícone de pesquisa encontrado ou a barra não ficou ativa a tempo.")
-        return False
-    except Exception as e:
-        print(f"Erro inesperado ao ativar a barra de pesquisa: {e}")
-        return False
+    for selector in search_selectors:
+        try:
+            search_icon = page.locator(selector).first
+            # Verifica se o elemento existe antes de tentar clicar
+            if await search_icon.count() > 0:
+                await search_icon.click(timeout=3000)
+                print(f"Ícone encontrado com seletor: {selector}")
+                
+                # Aguarda a barra de pesquisa ficar visível e editável
+                search_input = page.locator("#mat-input-1")
+                await search_input.wait_for(state="visible", timeout=10000)
+                await search_input.wait_for(state="editable", timeout=10000)
+                
+                print("Barra de pesquisa ativada!")
+                await page.wait_for_timeout(1000)
+                return True
+        except PlaywrightTimeoutError:
+            continue
+        except Exception as e:
+            print(f"Erro com seletor {selector}: {e}")
+            continue
+    
+    print("Nenhum ícone de pesquisa encontrado com os seletores disponíveis.")
+    return False
 
 
 async def get_rendered_page(p, url):
