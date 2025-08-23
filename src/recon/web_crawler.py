@@ -224,12 +224,66 @@ def get_rendered_html(url):
         driver.quit()
         return None
 
-def page_reload(driver, url_teste):
-    """Recarrega a página atual para limpar estado."""
+def complete_session_reset(driver, url_teste):
+    """Reset COMPLETO da sessão do navegador - limpa TUDO mantendo o navegador ativo"""
     try:
-        driver.quit()
-        driver = get_rendered_html(url_teste)
-        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        print("🔄 Iniciando reset completo da sessão...")
+        
+        # 1. Limpa TUDO do navegador
+        print("   • Limpando cookies, localStorage, sessionStorage...")
+        driver.execute_script("window.localStorage.clear();")
+        driver.execute_script("window.sessionStorage.clear();")
+        driver.delete_all_cookies()
+        
+        # 2. Limpa cache e histórico (quando possível)
+        try:
+            driver.execute_script("window.caches.keys().then(names => names.forEach(name => caches.delete(name)));")
+        except:
+            pass
+            
+        # 3. Navega para página limpa
+        print("   • Navegando para página limpa...")
+        driver.get(url_teste)
+        
+        # 4. Aguarda carregar completamente
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        time.sleep(1)
+        
+        # 5. Fecha tudo que pode interferir
+        print("   • Fechando modals e interferências...")
+        close_modals_and_popups(driver)
+        close_sidebar_generic(driver)
+        
+        # 6. Aguarda estabilizar
+        time.sleep(2)
+        
+        print("✅ Reset completo da sessão finalizado!")
         return driver
+        
     except Exception as e:
-        print(f"Erro ao recarregar página: {e}")
+        print(f"❌ Erro no reset completo: {e}")
+        return None
+
+def page_reload(driver, url_teste, campo_id=None):
+    """Recarrega a página com reset de sessão - versão eficiente e completa"""
+    try:
+        print(f"🔄 Reset de página para campo: {campo_id or 'genérico'}")
+        
+        # Usa reset completo de sessão
+        driver = complete_session_reset(driver, url_teste)
+        if not driver:
+            return None
+            
+        # Ativa barra de pesquisa APENAS se necessário
+        if campo_id == 'mat-input-1':
+            print("   • Ativando barra de pesquisa...")
+            try:
+                activate_search_bar(driver)
+            except Exception as e:
+                print(f"   ⚠️ Erro ao ativar busca: {e}")
+        
+        return driver
+        
+    except Exception as e:
+        print(f"❌ Erro no page_reload: {e}")
+        return None
