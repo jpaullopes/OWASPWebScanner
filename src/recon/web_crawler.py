@@ -102,7 +102,7 @@ async def activate_search_bar(page):
 
 async def get_rendered_page(p, url):
     """Navega para a URL e retorna o objeto da página após as interações iniciais."""
-    browser = await p.chromium.launch(headless=False) 
+    browser = await p.chromium.launch(headless=True) 
     page = await browser.new_page()
     
     try:

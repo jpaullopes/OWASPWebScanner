@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Adiciona o diretório raiz ao sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 from src.recon.web_crawler import get_rendered_page, find_tags
 from src.modules.xss.field_tester import eco_test

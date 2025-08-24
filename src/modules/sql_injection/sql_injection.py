@@ -1,4 +1,5 @@
 import requests
+from playwright.sync_api import sync_playwright
 
 # Lista de payloads para tentar burlar a injeção SQL em campos de login
 bypass_sql_injection_list = [
