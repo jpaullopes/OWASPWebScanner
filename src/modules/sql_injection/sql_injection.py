@@ -1,6 +1,6 @@
 import requests
 from playwright.sync_api import sync_playwright
-from network_analisys import find_login_api_url
+from .network_analisys import find_login_api_url
 
 # Lista de payloads para tentar burlar a injeção SQL em campos de login
 bypass_sql_injection_list = [
@@ -52,9 +52,10 @@ def sql_injection_test(payloads, login_url):
             # Verifica se o login foi bem-sucedido
             response = login_test(api_url, json_payload)
             if response and response.status_code == 200:
-                bypassed_payloads.append((key, payload, response.text))
+                response_json = response.json()
+                bypassed_payloads.append((key, payload, response_json))
             
     return bypassed_payloads
 
-# Exemplo de uso
+
 
