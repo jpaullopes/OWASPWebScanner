@@ -1,4 +1,4 @@
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from bs4 import BeautifulSoup
 
 def find_tags(html_content, tags):
@@ -54,7 +54,7 @@ def close_modals_and_popups(page):
 def activate_search_bar(page):
     """Ativa a barra de pesquisa usando múltiplas estratégias com Playwright."""
 
-    # Fechar modais e popups
+    # Fechar modals e popups
     close_modals_and_popups(page)
     search_selectors = [
         "mat-icon.mat-search_icon-search",  
