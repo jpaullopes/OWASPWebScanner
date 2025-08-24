@@ -22,7 +22,7 @@ def espionar_requisicao(request, api_info):
 def find_login_api_url(target_url):
     """
     Navega até uma página de login, tenta logar com dados falsos e 
-    captura o URL da API e o formato do JSON usado.
+    captura o URL da API e o formato do JSON usado. Retorna um dicionário com 'url' e 'json_format'.
     """
     
     api_info = {"url": None, "json_format": None}
