@@ -28,7 +28,7 @@ def find_login_api_url(target_url):
     api_info = {"url": None, "json_format": None}
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False) 
+        browser = p.chromium.launch() 
         page = browser.new_page()
 
         # Liga o espião ANTES de qualquer ação
