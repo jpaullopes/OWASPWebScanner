@@ -4,8 +4,8 @@ import asyncio
 async def eco_verificator(page, eco_text):
     """Verifica se o texto enviado foi processado corretamente."""
     try:
-        await page.wait_for_load_state("domcontentloaded", timeout=10000)
-        body_text = await page.locator("body").inner_text()
+        page.wait_for_load_state("domcontentloaded", timeout=10000)
+        body_text = page.locator("body").inner_text()
         if eco_text in body_text:
             return True
         return False
@@ -20,17 +20,17 @@ async def activate_mat_input_field(page, field_id="mat-input-1"):
         input_field = page.locator(f"#{field_id}")
         
         # Se já está visível e editável, retorna
-        if await input_field.is_visible() and await input_field.is_editable():
-            await input_field.focus()
+        if input_field.is_visible() and input_field.is_editable():
+            input_field.focus()
             return input_field
         
         # Se está visível, mas não editável, tenta focar e clicar
-        if await input_field.is_visible():
-            await input_field.focus()
-            await input_field.click()
-            await page.wait_for_timeout(500)
+        if input_field.is_visible():
+            input_field.focus()
+            input_field.click()
+            page.wait_for_timeout(500)
             
-            if await input_field.is_editable():
+            if input_field.is_editable():
                 return input_field
         
         # Tenta encontrar e clicar no ícone de busca para ativar o campo
@@ -43,22 +43,22 @@ async def activate_mat_input_field(page, field_id="mat-input-1"):
         for selector in search_selectors:
             try:
                 search_icon = page.locator(selector).first
-                if await search_icon.count() > 0:
-                    await search_icon.click(timeout=3000)
+                if search_icon.count() > 0:
+                    search_icon.click(timeout=3000)
                     print(f"Ícone de busca clicado com seletor: {selector}")
                     
                     # Aguarda o campo de input ficar disponível
-                    await input_field.wait_for(state="visible", timeout=5000)
+                    input_field.wait_for(state="visible", timeout=5000)
                     # Tenta focar e clicar no campo
-                    await input_field.focus()
-                    await input_field.click()
-                    await page.wait_for_timeout(500)
+                    input_field.focus()
+                    input_field.click()
+                    page.wait_for_timeout(500)
                     
-                    if await input_field.is_editable():
+                    if input_field.is_editable():
                         return input_field
                     else:
-                        await page.wait_for_timeout(1000)
-                        if await input_field.is_editable():
+                        page.wait_for_timeout(1000)
+                        if input_field.is_editable():
                             return input_field
             except PlaywrightTimeoutError:
                 continue
@@ -78,8 +78,8 @@ async def find_field_element(page, element):
     if element['id']:
         try:
             input_field = page.locator(f"#{element['id']}")
-            await input_field.click(timeout=5000)
-            await input_field.wait_for(state="visible", timeout=5000)
+            input_field.click(timeout=5000)
+            input_field.wait_for(state="visible", timeout=5000)
             return input_field
         except PlaywrightTimeoutError:
             input_field = None
@@ -88,8 +88,8 @@ async def find_field_element(page, element):
     if not input_field and element['name']:
         try:
             input_field = page.locator(f"[name='{element['name']}']")
-            await input_field.click(timeout=5000)
-            await input_field.wait_for(state="visible", timeout=5000)
+            input_field.click(timeout=5000)
+            input_field.wait_for(state="visible", timeout=5000)
             return input_field
         except PlaywrightTimeoutError:
             input_field = None
@@ -101,7 +101,7 @@ async def submit_form(page, input_field):
     try:
         # Procura por botão submit específico
         submit_button = page.locator("button[type='submit']").first
-        await submit_button.click(timeout=3000)
+        submit_button.click(timeout=3000)
         return
     except PlaywrightTimeoutError:
         pass
@@ -109,7 +109,7 @@ async def submit_form(page, input_field):
     try:
         # Procura pelo primeiro botão de login específico 
         login_button = page.locator("button:has-text('Log in')").first
-        await login_button.click(timeout=3000)
+        login_button.click(timeout=3000)
         return
     except PlaywrightTimeoutError:
         pass
@@ -117,15 +117,15 @@ async def submit_form(page, input_field):
     try:
         # Procura por botão com ID específico
         login_btn = page.locator("#loginButton")
-        if await login_btn.count() > 0:
-            await login_btn.click(timeout=3000)
+        if login_btn.count() > 0:
+            login_btn.click(timeout=3000)
             return
     except PlaywrightTimeoutError:
         pass
     
     # Pressiona Enter
     try:
-        await input_field.press("Enter")
+        input_field.press("Enter")
     except Exception:
         pass
 
@@ -134,26 +134,26 @@ async def return_to_original_page(page, original_url):
     try:
         current_url = page.url
         if current_url != original_url:
-            await page.goto(original_url, wait_until="domcontentloaded", timeout=10000)
+            page.goto(original_url, wait_until="domcontentloaded", timeout=10000)
             
             # Aguarda a página carregar e tenta fechar modais novamente
-            await page.wait_for_timeout(2000)
+            page.wait_for_timeout(2000)
             
             # Tenta fechar modal que pode aparecer ao voltar
             try:
                 close_button = page.locator("button[class*='close'], button[aria-label*='close'], button:has-text('×')")
-                await close_button.first.click(timeout=2000)
+                close_button.first.click(timeout=2000)
             except PlaywrightTimeoutError:
                 try:
                     dismiss_button = page.locator("button:has-text('Dismiss'), button:has-text('OK')")
-                    await dismiss_button.first.click(timeout=2000)
+                    dismiss_button.first.click(timeout=2000)
                 except PlaywrightTimeoutError:
                     try:
                         backdrop = page.locator(".cdk-overlay-backdrop")
-                        await backdrop.click(timeout=2000)
+                        backdrop.click(timeout=2000)
                     except PlaywrightTimeoutError:
                         try:
-                            await page.keyboard.press("Escape")
+                            page.keyboard.press("Escape")
                         except Exception:
                             pass
     except Exception as e:
@@ -175,7 +175,7 @@ async def eco_test(lista, page, test_text):
             
             # Tratamento especial para o campo mat-input-1 (campo de busca)
             if element.get('id') == 'mat-input-1':
-                input_field = await activate_mat_input_field(page, 'mat-input-1')
+                input_field = activate_mat_input_field(page, 'mat-input-1')
                 if not input_field:
                     results.append({
                         'element': element,
@@ -185,25 +185,25 @@ async def eco_test(lista, page, test_text):
                     continue
             else:
                 # Tratamento normal para outros campos
-                input_field = await find_field_element(page, element)
+                input_field = find_field_element(page, element)
                     
             if input_field:
-                await input_field.clear() 
-                await input_field.fill(test_text)
+                input_field.clear() 
+                input_field.fill(test_text)
 
                 # Submete o formulário
-                await submit_form(page, input_field)
-                await page.wait_for_timeout(2000)
+                submit_form(page, input_field)
+                page.wait_for_timeout(2000)
                 
                 # Verifica se mudou de página após o teste
                 current_url = page.url
                 eco_result = False
                 
                 if current_url != original_url:
-                    eco_result = await eco_verificator(page, test_text)
+                    eco_result = eco_verificator(page, test_text)
                 else:
                     # Se não mudou, verifica na página atual
-                    eco_result = await eco_verificator(page, test_text)
+                    eco_result = eco_verificator(page, test_text)
                 
                 results.append({
                     'element': element,
@@ -220,6 +220,6 @@ async def eco_test(lista, page, test_text):
             })
         
         # Volta para a página original se necessário
-        await return_to_original_page(page, original_url)
+        return_to_original_page(page, original_url)
     
     return results
