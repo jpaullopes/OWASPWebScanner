@@ -55,14 +55,3 @@ def find_login_api_url(target_url):
     
     return api_info
 
-
-url_alvo = "http://localhost:3000/#/login"
-informacao_api = find_login_api_url(url_alvo)
-
-if informacao_api["url"]:
-    print("\n--- Descoberta Sucedida ---")
-    print(f"URL da API de Login: {informacao_api['url']}")
-    print(f"Formato do JSON: {informacao_api['json_format']}")
-else:
-    print("\n--- Descoberta Falhou ---")
-    print("Não foi possível encontrar a API de login.")
