@@ -27,8 +27,7 @@ def login_test(url, json_login):
         return response
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
-        return
- 
+        return 
 
 def sql_injection_test(payloads, login_url):
     """Testa cada payload na lista de injeção SQL e retorna os que funcionaram."""
@@ -41,9 +40,21 @@ def sql_injection_test(payloads, login_url):
 
     # Lista de bypass que funcionaram
     bypassed_payloads = []
+
     for key in informations["json_format"].keys():
+
         for payload in payloads:
+
+            # Cria uma cópia do JSON original e insere o payload
             json_payload = informations["json_format"].copy()
             json_payload[key] = payload
 
+            # Verifica se o login foi bem-sucedido
+            response = login_test(api_url, json_payload)
+            if response and response.status_code == 200:
+                bypassed_payloads.append((key, payload, response.text))
+            
+    return bypassed_payloads
+
+# Exemplo de uso
 
