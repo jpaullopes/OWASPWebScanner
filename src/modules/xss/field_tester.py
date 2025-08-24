@@ -1,7 +1,7 @@
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 import asyncio
 
-async def eco_verificator(page, eco_text):
+def eco_verificator(page, eco_text):
     """Verifica se o texto enviado foi processado corretamente."""
     try:
         page.wait_for_load_state("domcontentloaded", timeout=10000)
@@ -13,7 +13,7 @@ async def eco_verificator(page, eco_text):
         print(f"An error occurred during verification: {e}")
         return False
 
-async def activate_mat_input_field(page, field_id="mat-input-1"):
+def activate_mat_input_field(page, field_id="mat-input-1"):
     """Ativa especificamente o campo mat-input-1 (barra de pesquisa) usando Playwright"""
     try:
         # Verifica se o campo já está ativo
@@ -70,7 +70,7 @@ async def activate_mat_input_field(page, field_id="mat-input-1"):
         print(f"Erro ao ativar campo {field_id}: {e}")
         return None
 
-async def find_field_element(page, element):
+def find_field_element(page, element):
     """Encontra um elemento de campo usando diferentes estratégias com Playwright"""
     input_field = None
     
@@ -96,7 +96,7 @@ async def find_field_element(page, element):
     
     return input_field
 
-async def submit_form(page, input_field):
+def submit_form(page, input_field):
     """Submete o formulário usando diferentes estratégias com Playwright"""
     try:
         # Procura por botão submit específico
@@ -129,7 +129,7 @@ async def submit_form(page, input_field):
     except Exception:
         pass
 
-async def return_to_original_page(page, original_url):
+def return_to_original_page(page, original_url):
     """Volta para a página original e fecha modais usando Playwright"""
     try:
         current_url = page.url
@@ -159,7 +159,7 @@ async def return_to_original_page(page, original_url):
     except Exception as e:
         print(f"Erro ao verificar/voltar página: {e}")
 
-async def eco_test(lista, page, test_text):
+def eco_test(lista, page, test_text):
     """Função de teste para enviar um texto nos campos de input usando Playwright."""
     
     # Salva a URL original para voltar depois de cada teste
