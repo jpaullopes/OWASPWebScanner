@@ -1,7 +1,7 @@
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from bs4 import BeautifulSoup
 
-async def find_tags(html_content, tags):
+def find_tags(html_content, tags):
     """Função responsável por encontrar as tags passadas como parâmetro"""
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -22,7 +22,7 @@ async def find_tags(html_content, tags):
         print(f"An error occurred while parsing HTML: {e}")
         return []
 
-async def close_modals_and_popups(page):
+def close_modals_and_popups(page):
     """Tenta fechar modals, popups e aba lateral que podem interferir nos testes"""
     try:
         # Tenta fechar o popup de boas-vindas
@@ -51,7 +51,7 @@ async def close_modals_and_popups(page):
         print(f"Não foi possível pressionar ESC: {e}")
 
 
-async def activate_search_bar(page):
+def activate_search_bar(page):
     """Ativa a barra de pesquisa usando múltiplas estratégias com Playwright."""
 
     # Fechar modais e popups
@@ -100,7 +100,7 @@ async def activate_search_bar(page):
     return False
 
 
-async def get_rendered_page(p, url):
+def get_rendered_page(p, url):
     """Navega para a URL e retorna o objeto da página após as interações iniciais."""
     browser = p.chromium.launch(headless=True) 
     page = browser.new_page()
@@ -119,7 +119,7 @@ async def get_rendered_page(p, url):
             browser.close()
         return None, None
 
-async def page_reload(page, browser, url_teste, playwright_instance):
+def page_reload(page, browser, url_teste, playwright_instance):
     """Fecha a página e o navegador atuais e abre uma nova instância dentro do mesmo contexto do Playwright."""
     try:
         # Fecha o navegador atual
