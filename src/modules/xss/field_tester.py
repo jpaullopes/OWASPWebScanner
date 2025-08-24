@@ -16,18 +16,16 @@ async def eco_verificator(page, eco_text):
 async def activate_mat_input_field(page, field_id="mat-input-1"):
     """Ativa especificamente o campo mat-input-1 (barra de pesquisa) usando Playwright"""
     try:
-        # PRIMEIRO: verifica se o campo já está ativo
+        # Verifica se o campo já está ativo
         input_field = page.locator(f"#{field_id}")
         
-        # Se já está visível e editável, não precisa clicar no ícone novamente
+        # Se já está visível e editável, retorna
         if await input_field.is_visible() and await input_field.is_editable():
-            print(f"Campo {field_id} já está ativo, não precisa clicar no ícone")
             await input_field.focus()
             return input_field
         
-        # Se está visível mas não editável, tenta focar
+        # Se está visível, mas não editável, tenta focar e clicar
         if await input_field.is_visible():
-            print(f"Campo {field_id} visível mas não editável, tentando focar")
             await input_field.focus()
             await input_field.click()
             await page.wait_for_timeout(500)
@@ -35,12 +33,11 @@ async def activate_mat_input_field(page, field_id="mat-input-1"):
             if await input_field.is_editable():
                 return input_field
         
-        # SOMENTE se não estiver visível, tenta clicar no ícone
-        print(f"Campo {field_id} não está ativo, tentando ativar via ícone")
+        # Tenta encontrar e clicar no ícone de busca para ativar o campo
         search_selectors = [
-            "mat-icon.mat-search_icon-search",  # Classe específica do ícone correto
-            ".mat-search_icons mat-icon:has-text('search')",  # Container específico
-            "span.mat-search_icons mat-icon[class*='search']",  # Ainda mais específico
+            "mat-icon.mat-search_icon-search",  
+            ".mat-search_icons mat-icon:has-text('search')",  
+            "span.mat-search_icons mat-icon[class*='search']", 
         ]
         
         for selector in search_selectors:
@@ -52,8 +49,7 @@ async def activate_mat_input_field(page, field_id="mat-input-1"):
                     
                     # Aguarda o campo de input ficar disponível
                     await input_field.wait_for(state="visible", timeout=5000)
-                    
-                    # Foca no campo
+                    # Tenta focar e clicar no campo
                     await input_field.focus()
                     await input_field.click()
                     await page.wait_for_timeout(500)
@@ -78,7 +74,7 @@ async def find_field_element(page, element):
     """Encontra um elemento de campo usando diferentes estratégias com Playwright"""
     input_field = None
     
-    # Tenta encontrar por ID primeiro
+    # Faz a busca prioritariamente por ID
     if element['id']:
         try:
             input_field = page.locator(f"#{element['id']}")
@@ -88,7 +84,7 @@ async def find_field_element(page, element):
         except PlaywrightTimeoutError:
             input_field = None
     
-    # Se não funcionou por ID, tenta por NAME
+    # Busca por name se ID não funcionou
     if not input_field and element['name']:
         try:
             input_field = page.locator(f"[name='{element['name']}']")
@@ -111,7 +107,7 @@ async def submit_form(page, input_field):
         pass
     
     try:
-        # Procura por botão de login específico (primeiro encontrado)
+        # Procura pelo primeiro botão de login específico 
         login_button = page.locator("button:has-text('Log in')").first
         await login_button.click(timeout=3000)
         return
@@ -127,7 +123,7 @@ async def submit_form(page, input_field):
     except PlaywrightTimeoutError:
         pass
     
-    # Como último recurso, pressiona Enter no campo
+    # Pressiona Enter
     try:
         await input_field.press("Enter")
     except Exception:
@@ -197,8 +193,6 @@ async def eco_test(lista, page, test_text):
 
                 # Submete o formulário
                 await submit_form(page, input_field)
-                
-                # Aguarda um pouco para a página processar
                 await page.wait_for_timeout(2000)
                 
                 # Verifica se mudou de página após o teste
