@@ -1,5 +1,6 @@
 import requests
 from playwright.sync_api import sync_playwright
+from network_analisys import find_login_api_url
 
 # Lista de payloads para tentar burlar a injeção SQL em campos de login
 bypass_sql_injection_list = [
@@ -27,23 +28,22 @@ def login_test(url, json_login):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return
+ 
 
-def json_login_build(email, password):
-    """Cria o payload JSON para o login."""
-    return {
-        "email": email,
-        "password": password
-    }
-
-def sql_injection_test(payloads, url):
+def sql_injection_test(payloads, login_url):
     """Testa cada payload na lista de injeção SQL e retorna os que funcionaram."""
+
+    informations = find_login_api_url(login_url)
+    if not informations["url"] or not informations["json_format"]:
+        print("Não foi possível encontrar a API de login ou o formato do JSON.")
+        return []
+    api_url = informations["url"]
+
     # Lista de bypass que funcionaram
     bypassed_payloads = []
-    for payload in payloads:
-        json_login = json_login_build(payload, "password")
-        response = login_test(url, json_login)
-        if response.status_code == 200:
-            bypassed_payloads.append(payload)
-    return bypassed_payloads
+    for key in informations["json_format"].keys():
+        for payload in payloads:
+            json_payload = informations["json_format"].copy()
+            json_payload[key] = payload
 
 
