@@ -8,7 +8,7 @@ from src.recon.web_crawler import get_rendered_page, find_tags
 from src.modules.xss.field_tester import eco_test
 from src.modules.xss.xss import blind_xss_injection
 from src.modules.http_server import iniciar_servidor_ouvinte, obter_relatorio_detalhado
-from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 import threading
 import time
 
@@ -31,7 +31,7 @@ def main():
         time.sleep(1) # Dá um tempo para o servidor iniciar
 
         # 2. Iniciar o Playwright e navegar para a página
-        with async_playwright() as p:
+        with sync_playwright() as p:
             page, browser = get_rendered_page(p, URL_ALVO)
             if not page:
                 print("Falha ao carregar a página. Encerrando.")
