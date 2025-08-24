@@ -7,6 +7,17 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from src.recon.web_crawler import close_modals_and_popups  # Importação corrigida
 
+def espionar_requisicao(request, api_info):
+    """Listener que espiona requisições para capturar a URL da API de login e o formato do JSON"""
+    # 1. Filtra por requisições do tipo POST
+    if request.method == "POST":
+        # 2. Filtra por URLs que parecem ser de login
+        if "login" in request.url or "signin" in request.url or "auth" in request.url:
+            print(f"[!] Alvo encontrado: {request.method} {request.url}")
+            
+            # 3. Captura a URL e o formato do JSON
+            api_info["url"] = request.url
+            api_info["json_format"] = request.post_data_json
 
 def find_login_api_url(target_url):
     """
@@ -16,26 +27,12 @@ def find_login_api_url(target_url):
     
     api_info = {"url": None, "json_format": None}
 
-    def espionar_requisicao(request):
-        # 1. Filtra por requisições do tipo POST
-        if request.method == "POST":
-            # 2. Filtra por URLs que parecem ser de login
-            if "login" in request.url or "signin" in request.url or "auth" in request.url:
-                print(f"[!] Alvo encontrado: {request.method} {request.url}")
-                
-                # 3. Captura a URL e o formato do JSON
-                api_info["url"] = request.url
-                api_info["json_format"] = request.post_data_json
-                
-                # Para o listener para não capturar mais nada
-                page.remove_listener("request", espionar_requisicao)
-
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False) 
         page = browser.new_page()
 
         # Liga o espião ANTES de qualquer ação
-        page.on("request", espionar_requisicao)
+        page.on("request", lambda request: espionar_requisicao(request, api_info))
 
         # Navega para a página
         page.goto(target_url)
@@ -44,12 +41,10 @@ def find_login_api_url(target_url):
         close_modals_and_popups(page)
         
         # Simula o preenchimento e envio do formulário
-        # Usamos try/except pois os campos podem não existir
         try:
             page.locator("input[name='email']").fill("isca123@gmail.com")
             page.locator("input[name='password']").fill("isca123")
             page.locator("input[name='password']").press('Enter')
-            #page.locator("button[class='login-button']").press('Enter')
         except Exception as e:
             print(f"Não foi possível preencher o formulário automaticamente: {e}")
         
