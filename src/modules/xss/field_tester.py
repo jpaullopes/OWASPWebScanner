@@ -1,5 +1,5 @@
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
-import asyncio
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+import time
 
 def eco_verificator(page, eco_text):
     """Verifica se o texto enviado foi processado corretamente."""

@@ -2,8 +2,8 @@ from ..http_server import registrar_payload_injetado
 from .field_tester import eco_test, activate_mat_input_field, find_field_element, submit_form, return_to_original_page
 from .payload_builder import build_payloads, get_payload_types
 from ...recon.web_crawler import get_rendered_page, find_tags, page_reload
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
-import asyncio
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+import time
 
 # Configurações padrão
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
