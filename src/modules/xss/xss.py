@@ -8,7 +8,7 @@ import asyncio
 # Configurações padrão
 TAGS_TO_FIND = ['input', 'form', 'textarea', 'select']
 
-async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_original, playwright_instance):
+def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_original, playwright_instance):
     """Injeta payloads blind XSS - estratégia 'disparar e esquecer' usando Playwright"""
     
     injected_payloads = []
@@ -27,7 +27,7 @@ async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_or
                 try:
                     # Antes de cada payload, recarrega completamente a página
                     print(f"Recarregando página para payload {payload_type} no campo {field_name}")
-                    page, browser = await page_reload(page, browser, url_original, playwright_instance)
+                    page, browser = page_reload(page, browser, url_original, playwright_instance)
                     if not page:
                         print("Falha ao recarregar a página")
                         continue
@@ -47,13 +47,13 @@ async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_or
                     
                     # Tratamento especial para mat-input-1
                     if element.get('id') == 'mat-input-1':
-                        input_field = await activate_mat_input_field(page, 'mat-input-1')
+                        input_field = activate_mat_input_field(page, 'mat-input-1')
                         if not input_field:
                             print(f"Campo de busca mat-input-1 não pode ser ativado")
                             continue
                     else:
                         # Para outros campos, usa a lógica do field_tester
-                        input_field = await find_field_element(page, element)
+                        input_field = find_field_element(page, element)
                     
                     # Verifica se conseguiu encontrar/ativar o campo
                     if not input_field:
@@ -61,14 +61,14 @@ async def blind_xss_injection(campos_validos, page, browser, url_ouvinte, url_or
                         continue
                     
                     # Injeção do payload blind XSS
-                    await input_field.clear()
-                    await input_field.fill(payload)
+                    input_field.clear()
+                    input_field.fill(payload)
                     
                     # Submete o formulário
-                    await submit_form(page, input_field)
+                    submit_form(page, input_field)
                     
                     # Aguarda um pouco para a página processar
-                    await page.wait_for_timeout(2000)
+                    page.wait_for_timeout(2000)
                     
                     injected_payloads.append({
                         'payload_id': payload_id,
