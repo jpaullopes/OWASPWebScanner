@@ -18,14 +18,12 @@ def word_list_reader(word_list):
 def check_url_status(url, page):
     """Verifica o status da URL usando requests e Playwright."""
     try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            print(f"[Requests] URL found: {url} (Status: {response.status_code})")
-            return
-
-        page.goto(url, timeout=5000)
-        if page.status == 200:
-            print(f"[Playwright] URL found: {url} (Status: {page.status})")
+        response = page.goto(url, timeout=5000)
+        if response and response.status == 200:
+            return True
+        else:
+            return False
 
     except Exception as e:
         print(f"Error accessing {url}: {e}")
+        return False
