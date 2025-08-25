@@ -12,3 +12,5 @@ Este projeto tem como objetivo ser uma ferramenta de aprendizado para a criaçã
 - **sql_injection**: Módulo responsável por realizar uma série de injeções SQL com objetivo de encontrar possíveis bypasses de autenticação na aplicação.
 
 - **xss**: Módulo responsável por identificar vulnerabilidades XSS na aplicação através da análise de campos de entrada e execução de testes de blind XSS.
+
+- **broken_acess_control**: Moódulo responsável por realizar testes de quebra de controle de acesso com base em uma word-list pré-definida.
