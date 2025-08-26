@@ -60,3 +60,8 @@ def url_scanner(base_url, word_list):
         
         print(f"Scan concluído! Encontradas {len(found_urls)} URLs acessíveis.")
         browser.close()
+
+# Exemplo de uso
+target_base_url = "http://localhost:3000/#/login"
+wordlist_path = os.path.join(os.path.dirname(__file__), "url_list.txt")
+url_scanner(target_base_url, wordlist_path)
