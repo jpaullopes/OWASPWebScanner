@@ -1,7 +1,8 @@
-import threading
-import requests
 from playwright.sync_api import sync_playwright
 from login_acess import login_acess
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def word_list_reader(word_list):
     """Responsavél por fazer a leitura do arquivo de wordlist e retornar uma lista de URLs."""
@@ -17,10 +18,12 @@ def word_list_reader(word_list):
         return []
     
 def check_url_status(url, page):
-    """Verifica o status da URL usando requests e Playwright."""
+    """Verifica o status da URL usando Playwright."""
     try:
         response = page.goto(url, timeout=5000)
         if response and response.status == 200:
+            # Se a URL for acessível, imprime a URL
+            print(f"[Playwright] URL found: {url} (Status: {response.status})")
             return True
         else:
             return False
@@ -37,20 +40,23 @@ def url_scanner(base_url, word_list):
         return
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         page = browser.new_page()
         
         # Realiza o login na página alvo
-        login_acess(page)
-
-        threads = []
+        login_success = login_acess(page)
+        
+        if not login_success:
+            print("Não foi possível fazer login. Abortando scan.")
+            browser.close()
+            return
+        
+        # Escaneia URLs sequencialmente para evitar problemas de concorrência
+        found_urls = []
         for word in url_list:
             url = f"{base_url}/{word}"
-            thread = threading.Thread(target=lambda u=url: check_url_status(u, page))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
-
+            if check_url_status(url, page):
+                found_urls.append(url)
+        
+        print(f"Scan concluído! Encontradas {len(found_urls)} URLs acessíveis.")
         browser.close()
