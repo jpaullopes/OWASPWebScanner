@@ -10,6 +10,9 @@ EMAIL_LOGIN = os.getenv("EMAIL_LOGIN")
 PASSWORD_LOGIN = os.getenv("PASSWORD_LOGIN")
 
 
+from playwright.sync_api import TimeoutError
+
+
 def login_acess(page, url_login):
     """Realiza o login na página alvo com as credenciais que estão
     no arquivo environment."""
@@ -29,16 +32,15 @@ def login_acess(page, url_login):
         page.locator("input[name='password']").fill(PASSWORD_LOGIN)
         page.locator("input[name='password']").press("Enter")
 
-        # Aguarda um pouco para o login processar
-        page.wait_for_timeout(3000)
-
-        # Verifica se o login foi bem-sucedido checando se ainda está na página de login
-        current_url = page.url
-        if "login" not in current_url:
+        # Aguarda a URL mudar, indicando que o login foi bem-sucedido
+        try:
+            # Espera a URL não ser mais a de login.
+            # O timeout deve ser suficiente para a página carregar.
+            page.wait_for_url(lambda url: url != url_login and "login" not in url, timeout=7000)
             print("Login realizado com sucesso!")
             return True
-        else:
-            print("Login falhou - ainda na página de login")
+        except TimeoutError:
+            print("Login falhou - A URL não mudou após a tentativa ou ainda contém 'login'.")
             return False
 
     except Exception as e:
