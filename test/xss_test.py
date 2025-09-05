@@ -2,15 +2,15 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-from modules.server import iniciar_servidor_ouvinte, obter_relatorio_detalhado
+from src.modules.server import iniciar_servidor_ouvinte, obter_relatorio_detalhado
 from src.modules.xss import blind_xss_injection, eco_test
 from src.recon import find_tags, get_rendered_page
 
 # --- Configurações ---
-URL_ALVO = "http://localhost:3000/#/search"
+URL_ALVO = "http://localhost:8000"
 TAGS_PARA_BUSCAR = ["input", "textarea", "select"]
 TEXTO_ECO_TEST = "TEXTO!@#$%"
-PORTA_OUVINTE = 8000
+PORTA_OUVINTE = 8080
 URL_OUVINTE = f"http://localhost:{PORTA_OUVINTE}"
 
 
