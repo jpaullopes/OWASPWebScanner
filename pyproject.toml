@@ -11,9 +11,11 @@ dependencies = [
     "pyngrok",
     "python-dotenv"
 ]
-[project.optional-dependencies]
+
+[dependency-groups]
 dev = [
-    "ruff"
+    "ruff",
+    "sphinx"
 ]
 
 [tool.ruff]
