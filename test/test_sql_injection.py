@@ -1,4 +1,4 @@
-from src.modules.sql_injection import bypass_sql_injection_list, sql_injection_test
+from src.modules.SqlInjectionScanner import bypass_sql_injection_list, sql_injection_test
 
 url_login = "http://localhost:3000/#/login"
 bypassed = sql_injection_test(bypass_sql_injection_list, url_login)
