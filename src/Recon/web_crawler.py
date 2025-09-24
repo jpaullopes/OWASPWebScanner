@@ -1,140 +1,162 @@
-from bs4 import BeautifulSoup
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+# spider.py
+from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
+from urllib.parse import urljoin, urlparse
+import time
+import json
 
+# --- AVISO ---
+# Este script é para fins educacionais.
+# Execute-o apenas em ambientes de teste autorizados, como o OWASP Juice Shop local.
 
-def find_tags(html_content, tags):
-    """Função responsável por encontrar as tags passadas como parâmetro"""
-    try:
-        soup = BeautifulSoup(html_content, "html.parser")
-        found_tags = []
+class Spider:
+    def __init__(self, base_url: str):
+        self.base_url = base_url
+        self.domain = urlparse(base_url).netloc
+        self.urls_to_visit = {base_url}  # Usamos um set para evitar duplicatas
+        self.visited_urls = set()
+        self.found_targets = {
+            "alvos_para_sqli": set(),
+            "alvos_para_xss": []
+        }
+        self.cookies = None
 
-        for tag in tags:
-            foud_tag_elements = soup.find_all(tag)
-            for tag_elements in foud_tag_elements:
-                if tag_elements:
-                    tag_info = {
-                        "name": tag_elements.get("name"),
-                        "id": tag_elements.get("id"),
-                        "type": tag_elements.get("type"),
-                    }
-                    found_tags.append(tag_info)
-        return found_tags
-    except Exception as e:
-        print(f"An error occurred while parsing HTML: {e}")
-        return []
-
-
-def close_modals_and_popups(page):
-    """Tenta fechar modals, popups e aba lateral que podem interferir nos testes"""
-    try:
-        # Tenta fechar o popup de boas-vindas
-        page.locator("button[aria-label='Close Welcome Banner']").click(timeout=2000)
-    except PlaywrightTimeoutError:
-        pass
-
-    try:
-        # Tenta fechar o popup de cookies
-        page.locator(".cc-btn.cc-dismiss").click(timeout=2000)
-    except PlaywrightTimeoutError:
-        pass
-
-    try:
-        # Tenta fechar aba lateral (sidenav) se estiver aberta
-        sidebar_backdrop = page.locator(
-            ".cdk-overlay-backdrop, mat-sidenav-container .mat-drawer-backdrop"
-        )
-        if sidebar_backdrop.count() > 0:
-            sidebar_backdrop.first.click(timeout=2000)
-    except PlaywrightTimeoutError:
-        pass
-
-    try:
-        # Tenta pressionar ESC para fechar outros modais
-        page.keyboard.press("Escape")
-    except Exception as e:
-        print(f"Não foi possível pressionar ESC: {e}")
-
-
-def activate_search_bar(page):
-    """Ativa a barra de pesquisa usando múltiplas estratégias com Playwright."""
-
-    # Fechar modals e popups
-    close_modals_and_popups(page)
-    search_selectors = [
-        "mat-icon.mat-search_icon-search",
-        ".mat-search_icons mat-icon:has-text('search')",  #
-        "span.mat-search_icons mat-icon[class*='search']",
-        "mat-icon:has-text('search'):not([class*='menu'])",
-    ]
-
-    for selector in search_selectors:
+    def close_modals_and_popups(self, page):
+        """Tenta fechar modals, popups e aba lateral que podem interferir nos testes"""
         try:
-            search_icon = page.locator(selector).first
-            # Verifica se o elemento existe antes de tentar clicar
-            if search_icon.count() > 0:
-                search_icon.click(timeout=3000)
-
-                # Aguarda a barra de pesquisa ficar visível
-                search_input = page.locator("#mat-input-1")
-
-                # Espera a barra ficar visível
-                search_input.wait_for(state="visible", timeout=5000)
-                print("Campo de pesquisa agora está visível")
-
-                # Verifica se realmente é um campo editável
-                if search_input.is_editable():
-                    page.wait_for_timeout(1000)
-
-                    # Fecha qualquer aba latera
-                    close_modals_and_popups(page)
-                    return True
-                else:
-                    page.wait_for_timeout(1000)
-                    if search_input.is_editable():
-                        close_modals_and_popups(page)
-                        return True
+            # Tenta fechar o popup de boas-vindas
+            page.locator("button[aria-label='Close Welcome Banner']").click(timeout=2000)
         except PlaywrightTimeoutError:
-            print(f"Timeout com seletor {selector}")
-            continue
+            pass
+
+        try:
+            # Tenta fechar o popup de cookies
+            page.locator(".cc-btn.cc-dismiss").click(timeout=2000)
+        except PlaywrightTimeoutError:
+            pass
+
+        try:
+            # Tenta fechar aba lateral (sidenav) se estiver aberta
+            sidebar_backdrop = page.locator(
+                ".cdk-overlay-backdrop, mat-sidenav-container .mat-drawer-backdrop"
+            )
+            if sidebar_backdrop.count() > 0:
+                sidebar_backdrop.first.click(timeout=2000)
+        except PlaywrightTimeoutError:
+            pass
+
+        try:
+            # Tenta pressionar ESC para fechar outros modais
+            page.keyboard.press("Escape")
         except Exception as e:
-            print(f"Erro com seletor {selector}: {e}")
-            continue
+            print(f"Não foi possível pressionar ESC: {e}")
 
-    print("Nenhum ícone de pesquisa encontrado com os seletores disponíveis")
-    return False
+    def _login(self, page: Page):
+        """Faz login na aplicação para obter uma sessão autenticada."""
+        print("[*] Tentando fazer login...")
+        try:
+            login_url = urljoin(self.base_url, "/#/login")
+            page.goto(login_url)
+            self.close_modals_and_popups(page)  # Fecha modals e popups antes de interagir
+            page.get_by_label("Email").fill("admin@juice-sh.op") # Use credenciais de teste
+            page.get_by_label("Text field for the login password").fill("admin123")  # Locator mais específico para evitar conflito
+            page.get_by_role("button", name="Login").click()
+            
+            # Espera a navegação para a página principal após o login
+            page.wait_for_url(lambda url: "search" in url, timeout=5000)
+            
+            # Captura os cookies de sessão para usar depois
+            self.cookies = page.context.cookies()
+            print(f"[+] Login bem-sucedido. Cookies de sessão capturados: {len(self.cookies) if self.cookies else 0} cookies")
+            # Adiciona a URL atual à lista de visita, já que estamos logados
+            self.urls_to_visit.add(page.url)
+        except Exception as e:
+            print(f"[-] Falha no login: {e}. O spider continuará sem autenticação.")
 
+    def _extract_data(self, page: Page):
+        """Extrai links e formulários da página atual."""
+        
+        # --- 1. Extrai todos os links ---
+        links = page.locator('a').all()
+        for link in links:
+            try:
+                href = link.get_attribute('href')
+                if href:
+                    # Converte o link relativo (ex: /sobre) para um link absoluto
+                    full_url = urljoin(self.base_url, href)
+                    
+                    # Garante que o spider não saia do domínio alvo
+                    if urlparse(full_url).netloc == self.domain:
+                        
+                        # Se a URL tem parâmetros, é um alvo de alta prioridade para SQLi
+                        if '?' in full_url and '=' in full_url:
+                            self.found_targets["alvos_para_sqli"].add(full_url)
+                        
+                        # Adiciona o link à lista de URLs para visitar
+                        if full_url not in self.visited_urls:
+                            self.urls_to_visit.add(full_url)
+            except Exception:
+                continue # Ignora links problemáticos
 
-def get_rendered_page(p, url):
-    """Navega para a URL e retorna o objeto da página após as interações iniciais."""
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
+        # --- 2. Extrai todos os formulários ---
+        forms = page.locator('form').all()
+        for form in forms:
+            try:
+                action = form.get_attribute('action') or page.url
+                form_url = urljoin(self.base_url, action)
+                inputs = form.locator('input, textarea, select').all()
+                field_names = [i.get_attribute('name') for i in inputs if i.get_attribute('name')]
+                
+                # Formulários são alvos de alta prioridade para XSS
+                self.found_targets["alvos_para_xss"].append({
+                    "url_de_envio": form_url,
+                    "campos": field_names
+                })
+            except Exception:
+                continue # Ignora formulários problemáticos
 
-    try:
-        page.goto(url, wait_until="domcontentloaded", timeout=15000)
-        # Fecha modals e popups
-        close_modals_and_popups(page)
-        # Ativa a barra de pesquisa se disponível
-        activate_search_bar(page)
+    def crawl(self):
+        """Executa o processo de crawling."""
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False) # Mude para True para rodar em background
+            context = browser.new_context()
+            page = context.new_page()
 
-        return page, browser
-    except Exception as e:
-        print(f"Ocorreu um erro ao carregar a página: {e}")
-        if "browser" in locals() and browser.is_connected():
+            # Tenta fazer o login primeiro para ter acesso a mais páginas
+            self._login(page)
+            
+            # Loop principal: continua enquanto houver URLs para visitar
+            while self.urls_to_visit:
+                url = self.urls_to_visit.pop()
+                if url in self.visited_urls:
+                    continue
+
+                print(f"[*] Explorando: {url}")
+                try:
+                    page.goto(url, timeout=5000)
+                    self.visited_urls.add(url)
+                    self._extract_data(page)
+                except Exception as e:
+                    print(f"[-] Não foi possível acessar {url}: {e}")
+
             browser.close()
-        return None, None
+            self._save_report()
+
+    def _save_report(self):
+        """Salva os alvos encontrados em um arquivo JSON."""
+        # Converte os sets para listas para poder salvar em JSON
+        self.found_targets["alvos_para_sqli"] = list(self.found_targets["alvos_para_sqli"])
+        
+        # Adiciona os cookies capturados ao relatório
+        self.found_targets["cookies"] = self.cookies
+        print(f"[*] Salvando relatório com cookies: {self.found_targets['cookies']}")
+        
+        with open("relatorio_spider.json", "w") as f:
+            json.dump(self.found_targets, f, indent=4)
+        print("\n[+] Relatório de inteligência salvo em 'relatorio_spider.json'")
 
 
-def page_reload(page, browser, url_teste, playwright_instance):
-    """Fecha a página e o navegador atuais e abre uma nova instância
-    dentro do mesmo contexto do Playwright."""
-    try:
-        # Fecha o navegador atual
-        if browser and browser.is_connected():
-            browser.close()
-
-        # Cria um novo navegador e página dentro do mesmo contexto
-        page, browser = get_rendered_page(playwright_instance, url_teste)
-        return page, browser
-    except Exception as e:
-        print(f"Erro ao recarregar a página: {e}")
-        return None, None
+if __name__ == "__main__":
+    # URL do nosso laboratório
+    target = "http://192.168.3.11:3000"
+    spider = Spider(target)
+    spider.crawl()
