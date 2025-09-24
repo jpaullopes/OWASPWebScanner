@@ -1,10 +1,12 @@
 import os
+import requests
+import concurrent.futures
 from urllib.parse import urljoin
-
 from playwright.sync_api import sync_playwright
+from .login_access import login_and_get_cookies
 
-from .login_access import login_acess
-
+# Número de threads para a varredura concorrente
+MAX_THREADS = 20
 
 def word_list_reader(word_list_path):
     """Lê uma wordlist de um arquivo e retorna uma lista de caminhos."""
@@ -15,81 +17,77 @@ def word_list_reader(word_list_path):
         print(f"Erro: Arquivo de wordlist não encontrado em '{word_list_path}'")
         return []
 
-
-def check_url_status(page, url, login_url):
+def check_url_fast(session, url):
     """
-    Verifica o status de uma URL, garantindo que não houve redirecionamento para a página de login.
+    Verifica uma única URL usando uma sessão de requests.
+    Retorna a URL se o acesso for bem-sucedido (status 200), senão None.
     """
     try:
-        response = page.goto(url, timeout=5000, wait_until="domcontentloaded")
-        # Garante que a URL final não seja a de login
-        final_url = page.url
-        if login_url in final_url and url != login_url:
-            print(f"[-] Acesso negado a {url} (redirecionado para login)")
-            return False
+        # Usamos stream=True e um timeout para não baixar corpos de resposta grandes
+        # e para evitar que uma requisição lenta prenda a thread.
+        with session.get(url, timeout=5, allow_redirects=False, stream=True) as response:
+            # Consideramos sucesso apenas um status 200 OK.
+            # Outros status como 302 (redirecionamento) são ignorados aqui,
+            # pois a sessão já está autenticada.
+            if response.status_code == 200:
+                print(f"[+] URL acessível: {url} (Status: 200)")
+                return url
+            else:
+                # Imprime silenciosamente para não poluir a saída
+                # print(f"[-] URL: {url} (Status: {response.status_code})")
+                return None
+    except requests.RequestException as e:
+        # Ignora erros de conexão, timeout, etc.
+        # print(f"[!] Erro ao acessar {url}: {e}")
+        return None
 
-        if response and response.status == 200:
-            print(f"[+] URL acessível encontrada: {url} (Status: {response.status})")
-            return True
-        else:
-            status = response.status if response else "N/A"
-            print(f"[-] URL retornou status diferente de 200: {url} (Status: {status})")
-            return False
-
-    except Exception as e:
-        print(f"[!] Erro ao acessar {url}: {e}")
-        return False
-
-
-def url_scanner(login_url, base_url, word_list_path, headless=True):
-    """Função principal para escanear URLs a partir de uma wordlist após o login."""
+def url_scanner(login_url, base_url, word_list_path, headless=False):
+    """Função principal para escanear URLs usando a abordagem híbrida."""
     paths = word_list_reader(word_list_path)
     if not paths:
         print("Nenhuma URL para escanear.")
         return
 
-    print(f"Iniciando scanner com {len(paths)} caminhos.")
-
+    print("--- Iniciando Fase 1: Autenticação com Playwright ---")
+    cookies = None
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         page = browser.new_page()
-
-        # Realiza o login
-        if not login_acess(page, login_url):
-            print("Falha no login. Abortando o scan.")
-            browser.close()
-            return
-
-        print("\n--- Iniciando varredura de URLs ---\n")
-        found_urls = []
-        for path in paths:
-            # Constrói a URL completa de forma segura
-            url = urljoin(base_url, path.lstrip('/'))
-            print(f"[*] Testando URL: {url}")
-            if check_url_status(page, url, login_url):
-                found_urls.append(url)
-
-        print(f"\n--- Scan concluído! ---")
-        if found_urls:
-            print(f"Encontradas {len(found_urls)} URLs acessíveis:")
-            for url in found_urls:
-                print(f"  - {url}")
-        else:
-            print("Nenhuma URL restrita foi acessada com sucesso.")
-
+        cookies = login_and_get_cookies(page, login_url)
         browser.close()
 
-# # Exemplo de como chamar esta função a partir de outro arquivo:
-# if __name__ == "__main__":
-#     # Defina as configurações do alvo aqui
-#     target_login_url = "http://localhost:3000/#/login"
-#     target_base_url = "http://localhost:3000/#/"
-#
-#     # O caminho para a wordlist é relativo a este arquivo
-#     wordlist_path = os.path.join(os.path.dirname(__file__), "url_list.txt")
-#
-#     # Garante que a URL base termina com /
-#     base_url = target_base_url if target_base_url.endswith('/') else target_base_url + '/'
-#
-#     # Chama o scanner
-#     url_scanner(target_login_url, base_url, wordlist_path, headless=False)
+    if not cookies:
+        print("Falha na autenticação. Abortando a varredura.")
+        return
+
+    print("--- Iniciando Fase 2: Varredura Rápida com Requests ---")
+    
+    # Configura a sessão de requests com os cookies obtidos
+    session = requests.Session()
+    for cookie in cookies:
+        session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
+    
+    # Prepara a lista de URLs completas
+    full_urls = [urljoin(base_url, path.lstrip('/')) for path in paths]
+    found_urls = []
+
+    print(f"Iniciando varredura de {len(full_urls)} URLs com {MAX_THREADS} threads...")
+
+    # Executa a varredura concorrente
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        # Mapeia a função check_url_fast para cada URL
+        future_to_url = {executor.submit(check_url_fast, session, url): url for url in full_urls}
+        for future in concurrent.futures.as_completed(future_to_url):
+            result = future.result()
+            if result:
+                found_urls.append(result)
+
+    print("\n--- Scan concluído! ---")
+    if found_urls:
+        print(f"Encontradas {len(found_urls)} URLs acessíveis:")
+        # Ordena para uma saída consistente
+        for url in sorted(found_urls):
+            print(f"  - {url}")
+    else:
+        print("Nenhuma URL restrita foi acessada com sucesso.")
+
