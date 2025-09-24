@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 
 from src.modules.CallbackServer import iniciar_servidor_ouvinte, obter_relatorio_detalhado
 from src.modules.XssScanner import blind_xss_injection, eco_test
-from src.recon import find_tags, get_rendered_page
+from src.Recon import find_tags, get_rendered_page
 
 # --- Configurações ---
 URL_ALVO = "http://localhost:8000"
