@@ -1,6 +1,6 @@
 from playwright.sync_api import Page, Browser, TimeoutError as PlaywrightTimeoutError
 from typing import Any
-from ...recon.web_crawler import page_reload
+from ...Recon.web_crawler import page_reload
 from ..CallbackServer.xss_http_server import registrar_payload_injetado
 
 class XSSScanner:
