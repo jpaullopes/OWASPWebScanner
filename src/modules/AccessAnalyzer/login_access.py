@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
-from src.recon import close_modals_and_popups
+from src.Recon import close_modals_and_popups
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -13,36 +13,37 @@ PASSWORD_LOGIN = os.getenv("PASSWORD_LOGIN")
 from playwright.sync_api import TimeoutError
 
 
-def login_acess(page, url_login):
-    """Realiza o login na página alvo com as credenciais que estão
-    no arquivo environment."""
-
+def login_and_get_cookies(page, url_login):
+    """
+    Realiza o login e, se for bem-sucedido, retorna os cookies da sessão.
+    Retorna:
+        list: Uma lista de dicionários de cookies em caso de sucesso.
+        None: Em caso de falha.
+    """
     try:
-        # Navega para a página de login primeiro
+        # Navega para a página de login
         page.goto(url_login)
-
-        # Chama a função para fechar modais e popups
         close_modals_and_popups(page)
 
-        # Aguarda os campos estarem disponíveis
+        # Preenche o formulário de login
         page.wait_for_selector("input[name='email']", timeout=10000)
-
-        # Simula o preenchimento e envio do formulário
         page.locator("input[name='email']").fill(EMAIL_LOGIN)
         page.locator("input[name='password']").fill(PASSWORD_LOGIN)
         page.locator("input[name='password']").press("Enter")
 
-        # Aguarda a URL mudar, indicando que o login foi bem-sucedido
+        # Aguarda a navegação pós-login
         try:
-            # Espera a URL não ser mais a de login.
-            # O timeout deve ser suficiente para a página carregar.
             page.wait_for_url(lambda url: url != url_login and "login" not in url, timeout=7000)
             print("Login realizado com sucesso!")
-            return True
+
+            # Extrai os cookies do contexto do navegador
+            cookies = page.context.cookies()
+            print(f"Cookies extraídos: {[cookie['name'] for cookie in cookies]}")
+            return cookies
         except TimeoutError:
-            print("Login falhou - A URL não mudou após a tentativa ou ainda contém 'login'.")
-            return False
+            print("Login falhou - A URL não mudou após a tentativa.")
+            return None
 
     except Exception as e:
         print(f"Erro durante o login: {e}")
-        return False
+        return None
