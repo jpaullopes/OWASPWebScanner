@@ -1,21 +1,33 @@
+"""
+Access Analyzer Module
+
+Este módulo testa falhas de Controle de Acesso (Broken Access Control)
+tentando acessar recursos restritos ou não linkados.
+
+Funcionalidades:
+- Leitura de paths descobertos do relatório do crawler
+- Testes de acesso autenticado com cookies
+- Varredura concorrente com threads
+
+Limitações:
+- Não testa permissões granulares (apenas status HTTP)
+- Usa threads (risco de sobrecarga no alvo)
+- Depende de relatório válido
+
+Exemplo de Uso:
+    python test/run_access_analyzer_test.py  # Após crawler
+"""
+
 import os
 import requests
 import concurrent.futures
+import json
 from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright
-from .login_access import login_and_get_cookies
+from ..Auth.authentication import login_and_get_cookies
 
 # Número de threads para a varredura concorrente
 MAX_THREADS = 20
-
-def word_list_reader(word_list_path):
-    """Lê uma wordlist de um arquivo e retorna uma lista de caminhos."""
-    try:
-        with open(word_list_path, "r", encoding="utf-8") as file:
-            return [line.strip() for line in file if line.strip()]
-    except FileNotFoundError:
-        print(f"Erro: Arquivo de wordlist não encontrado em '{word_list_path}'")
-        return []
 
 def check_url_fast(session, url):
     """
@@ -41,21 +53,33 @@ def check_url_fast(session, url):
         # print(f"[!] Erro ao acessar {url}: {e}")
         return None
 
-def url_scanner(login_url, base_url, word_list_path, headless=False):
-    """Função principal para escanear URLs usando a abordagem híbrida."""
-    paths = word_list_reader(word_list_path)
+def url_scanner(login_url, base_url, report_path="relatorio_spider.json", headless=False):
+    """Função principal para escanear URLs usando a abordagem híbrida.
+    
+    Agora lê os alvos do relatório do crawler em vez de uma wordlist separada.
+    """
+    if not os.path.exists(report_path):
+        print(f"Erro: Relatório '{report_path}' não encontrado. Execute o crawler primeiro.")
+        return
+    
+    with open(report_path, "r") as f:
+        report = json.load(f)
+    
+    paths = report.get("alvos_para_access", [])
     if not paths:
-        print("Nenhuma URL para escanear.")
+        print("Nenhum alvo para access control encontrado no relatório.")
         return
 
-    print("--- Iniciando Fase 1: Autenticação com Playwright ---")
-    cookies = None
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        page = browser.new_page()
-        cookies = login_and_get_cookies(page, login_url)
-        browser.close()
-
+    # Usa cookies do relatório se disponíveis, senão faz login
+    cookies = report.get("cookies")
+    if not cookies:
+        print("--- Iniciando Fase 1: Autenticação com Playwright ---")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=headless)
+            page = browser.new_page()
+            cookies = login_and_get_cookies(page, login_url)
+            browser.close()
+    
     if not cookies:
         print("Falha na autenticação. Abortando a varredura.")
         return
@@ -65,11 +89,13 @@ def url_scanner(login_url, base_url, word_list_path, headless=False):
     # Configura a sessão de requests com os cookies obtidos
     session = requests.Session()
     for cookie in cookies:
-        session.cookies.set(cookie['name'], cookie['value'], domain=cookie['domain'])
+        session.cookies.set(cookie['name'], cookie['value'], domain=cookie.get('domain', ''))
     
-    # Prepara a lista de URLs completas
-    full_urls = [urljoin(base_url, path.lstrip('/')) for path in paths]
+    # Prepara a lista de URLs completas (paths já são URLs completas do relatório)
+    full_urls = paths  # Já são URLs completas
     found_urls = []
+
+    print(f"Iniciando varredura de {len(full_urls)} URLs com {MAX_THREADS} threads...")
 
     print(f"Iniciando varredura de {len(full_urls)} URLs com {MAX_THREADS} threads...")
 
