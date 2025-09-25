@@ -1,10 +1,32 @@
 # maestro.py
+"""
+SQL Injection Scanner Module
+
+Este módulo detecta vulnerabilidades de Injeção SQL em aplicações web.
+Utiliza sqlmap para executar testes automatizados em URLs alvo.
+
+Funcionalidades:
+- Leitura de alvos do relatório do crawler
+- Execução de sqlmap com cookies de sessão
+- Detecção baseada em indicadores de saída
+
+Limitações:
+- Depende de sqlmap instalado
+- Pode gerar falsos positivos/negativos
+- Timeout fixo de 5 minutos por alvo
+
+Exemplo de Uso:
+    python sql_injection.py  # Executa após crawler gerar relatório
+"""
+
 import json
 import subprocess
 import os
 
 def format_cookies(cookies_list: list) -> str:
     """Converte a lista de cookies do Playwright para uma string para o sqlmap."""
+    if not cookies_list:
+        return ""
     partes_do_cookie = []
     for cookie in cookies_list:
         partes_do_cookie.append(f"{cookie['name']}={cookie['value']}")
