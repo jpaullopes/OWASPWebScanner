@@ -1,3 +1,7 @@
-from .sql_injection import run_sqli_scan
+"""Compat package para o antigo módulo de SQL Injection."""
 
-__all__ = ["run_sqli_scan"]
+from __future__ import annotations
+
+from .sql_injection import format_cookies, run_sqli_scan
+
+__all__ = ["format_cookies", "run_sqli_scan"]
