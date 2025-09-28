@@ -63,6 +63,8 @@ class Spider:
                 full_url = urljoin(self.config.target_url, href)
                 if urlparse(full_url).netloc != urlparse(self.config.target_url).netloc:
                     continue
+                if "commit" in full_url or "github" in full_url:
+                    continue
                 if "?" in full_url and "=" in full_url:
                     self.report.sqli_targets.add(full_url)
                 self._queue_url(full_url)
@@ -74,14 +76,48 @@ class Spider:
         for form in forms:
             try:
                 action = form.get_attribute("action") or page.url
+                method = (form.get_attribute("method") or "get").lower()
+
                 inputs = form.locator("input, textarea, select").all()
-                fields = [element.get_attribute("name") for element in inputs if element.get_attribute("name")]
+                fields: list[str] = []
+                query_param_names: list[str] = []
+
+                for element in inputs:
+                    name_attr = element.get_attribute("name")
+                    if name_attr:
+                        fields.append(name_attr)
+                        query_param_names.append(name_attr)
+                        continue
+
+                    fallback_added = False
+                    for attr, prefix in (("id", "id::"), ("aria-label", "aria::"), ("placeholder", "placeholder::")):
+                        value = element.get_attribute(attr)
+                        if value:
+                            fields.append(f"{prefix}{value}")
+                            fallback_added = True
+                            break
+
+                    if not fallback_added:
+                        data_testid = element.get_attribute("data-testid")
+                        if data_testid:
+                            fields.append(f"data-testid::{data_testid}")
+
+                if not fields:
+                    continue
+
+                submit_url = urljoin(self.config.target_url, action)
                 self.report.xss_forms.append(
                     {
-                        "url_de_envio": urljoin(self.config.target_url, action),
+                        "url_de_envio": submit_url,
                         "campos": fields,
                     }
                 )
+
+                if method == "get" and query_param_names:
+                    base_url = submit_url.split("#", 1)[0]
+                    join_char = "&" if "?" in base_url else "?"
+                    query = "&".join(f"{name}=FUZZ" for name in query_param_names)
+                    self.report.sqli_targets.add(f"{base_url}{join_char}{query}")
             except Exception:
                 continue
 
@@ -109,6 +145,7 @@ class Spider:
                     continue
                 try:
                     page.goto(current_url, timeout=8000)
+                    page.wait_for_timeout(500)
                     self._visited.add(current_url)
                     self._extract_links(page, current_url)
                     self._extract_forms(page)
