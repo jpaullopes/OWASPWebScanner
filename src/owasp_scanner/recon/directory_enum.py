@@ -23,7 +23,7 @@ def run_ffuf(
     cookies: Optional[Iterable[dict]] = None,
     wordlist: Optional[Path] = None,
     threads: int = 15,
-    timeout: int = 300,
+    timeout: int = 900,
 ) -> set[str]:
     """Executes ffuf and returns the set of discovered paths."""
 
