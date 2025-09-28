@@ -1,6 +1,8 @@
-from .xss import TAGS_TO_FIND, run_xss_scan
+"""Compat package para o antigo módulo de XSS."""
 
-__all__ = [
-    "run_xss_scan",
-    "TAGS_TO_FIND"
-]
+from __future__ import annotations
+
+from .scanner import XSSScanner
+from owasp_scanner.scanners.xss.runner import run_xss_scanner as run_xss_scan
+
+__all__ = ["XSSScanner", "run_xss_scan"]
