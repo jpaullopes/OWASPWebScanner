@@ -1,95 +1,78 @@
+"""Manual helper to exercise the XSS scanner and callback server."""
+
+from __future__ import annotations
+
+import importlib
+import sys
 import time
-
-from playwright.sync_api import sync_playwright
-
-from src.modules.CallbackServer import iniciar_servidor_ouvinte, obter_relatorio_detalhado
-from src.modules.XssScanner import blind_xss_injection, eco_test
-from src.Recon import find_tags, get_rendered_page
-
-# --- Configurações ---
-URL_ALVO = "http://localhost:8000"
-TAGS_PARA_BUSCAR = ["input", "textarea", "select"]
-TEXTO_ECO_TEST = "TEXTO!@#$%"
-PORTA_OUVINTE = 8080
-URL_OUVINTE = f"http://localhost:{PORTA_OUVINTE}"
+from pathlib import Path
 
 
-def main():
-    """Função principal para orquestrar o scanner."""
-    page = None
-    browser = None
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = PROJECT_ROOT / "src"
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
+
+callback_module = importlib.import_module("owasp_scanner.callback.server")
+config_module = importlib.import_module("owasp_scanner.core.config")
+report_module = importlib.import_module("owasp_scanner.core.report")
+xss_module = importlib.import_module("owasp_scanner.scanners.xss.runner")
+
+CallbackServer = getattr(callback_module, "CallbackServer")
+tracker = getattr(callback_module, "tracker")
+load_configuration = getattr(config_module, "load_configuration")
+ReconReport = getattr(report_module, "ReconReport")
+run_xss_scanner = getattr(xss_module, "run_xss_scanner")
+
+
+TARGET_URL = "http://localhost:3000"
+CALLBACK_PORT = 8000
+REPORT_PATH = PROJECT_ROOT / "relatorio_spider.json"
+
+
+def run_test() -> None:
+    print("\n--- Executando teste manual do XSS Scanner ---")
+    print(f"Alvo: {TARGET_URL}")
+    print(f"Relatório: {REPORT_PATH}")
+    print(f"Callback: http://localhost:{CALLBACK_PORT}")
+
+    if not REPORT_PATH.exists():
+        print("[!] O relatório não foi encontrado. Execute o crawler antes deste teste.")
+        return
+
+    config = load_configuration(TARGET_URL, str(REPORT_PATH))
+    report = ReconReport.load(REPORT_PATH)
+
+    if not report.xss_forms:
+        print("[-] Nenhum formulário registrado no relatório.")
+        return
+
+    callback_server = CallbackServer(CALLBACK_PORT, tracker)
+    callback_server.start()
+
+    print("[*] Servidor de callback iniciado. Aguardando injeções...")
 
     try:
-        # 1. Iniciar o servidor ouvinte em uma thread separada
-        iniciar_servidor_ouvinte(PORTA_OUVINTE)
-        print(f"Servidor ouvinte iniciado em {URL_OUVINTE}")
-        time.sleep(1)  # Dá um tempo para o servidor iniciar
-
-        # 2. Iniciar o Playwright e navegar para a página
-        with sync_playwright() as p:
-            page, browser = get_rendered_page(p, URL_ALVO)
-            if not page:
-                print("Falha ao carregar a página. Encerrando.")
-                return
-
-            # 3. Extrair o HTML renderizado e encontrar campos
-            html_content = page.content()
-            campos_encontrados = find_tags(html_content, TAGS_PARA_BUSCAR)
-            print(f"Encontrados {len(campos_encontrados)} campos para teste.")
-
-            # 4. Executar o teste de eco para validar os campos
-            print("Executando teste de eco para validar campos...")
-            resultados_eco = eco_test(campos_encontrados, page, TEXTO_ECO_TEST)
-            campos_validos = [
-                res
-                for res in resultados_eco
-                if res.get("status") == "success" and res.get("eco_text", False)
-            ]
-            print(
-                f"Encontrados {len(campos_validos)} campos que refletem o input"
-                "(vulneráveis a eco)."
-            )
-
-            # 5. Injetar payloads de Blind XSS
-            if campos_validos:
-                print("\n--- Iniciando injeção de Blind XSS ---")
-                injected_payloads = blind_xss_injection(
-                    campos_validos, page, browser, URL_OUVINTE, URL_ALVO, p
-                )
-                print(f"Total de {len(injected_payloads)} payloads injetados.")
-            else:
-                print("Nenhum campo válido para injeção de Blind XSS encontrado.")
-                print("Resultados do eco test:")
-                for res in resultados_eco:
-                    print(
-                        f"  - Status: {res.get('status')}, Eco: {res.get('eco_text')}" 
-                        f"Erro: {res.get('error', 'N/A')}"
-                    )
-
-            # 6. Aguardar um tempo para possíveis callbacks
-            print("\nAguardando 15 segundos por callbacks de Blind XSS...")
+        results = run_xss_scanner(config, report, f"http://localhost:{CALLBACK_PORT}")
+        if not results:
+            print("[-] Nenhuma injeção foi realizada (nenhum campo com eco positivo).")
+        else:
+            print(f"[+] {len(results)} payload(s) injetados. Aguardando callbacks...")
             time.sleep(15)
 
-    except Exception as e:
-        print(f"Ocorreu um erro na execução principal: {e}")
-
+            received = tracker.received
+            if not received:
+                print("[-] Nenhum callback recebido até o momento.")
+            else:
+                print("[+] Callbacks recebidos:")
+                for cb_id, info in received.items():
+                    print(f"    - {cb_id} :: payload={info.payload_id} from {info.client_ip}")
+    except Exception as exc:  # pragma: no cover - helper script
+        print(f"[!] Erro ao executar scanner de XSS: {exc}")
     finally:
-        # 7. Gerar o relatório final
-        print("\n--- Relatório Final de Blind XSS ---")
-        relatorio = obter_relatorio_detalhado()
-        if not relatorio["payloads_executados"]:
-            print("Nenhum payload foi executado com sucesso.")
-        else:
-            print("Payloads executados com sucesso:")
-            for payload_id, info in relatorio["payloads_executados"].items():
-                print(f"  - ID: {payload_id}")
-                print(f"    Campo: {info['campo_name']} ({info['campo_id']})")
-                print(f"    URL: {info['url_origem']}")
-                print(f"    Executado em: {info['executed_at']}")
-
-        if browser and browser.is_connected():
-            browser.close()
-            print("\nNavegador fechado.")
+        callback_server.stop()
+        print("[*] Servidor de callback finalizado.")
 
 
-main()
+if __name__ == "__main__":
+    run_test()
