@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from playwright.sync_api import Browser, Locator, Page, TimeoutError as PlaywrightTimeoutError
 
@@ -14,7 +14,7 @@ PAYLOAD_TEMPLATES = (
     "<details open ontoggle=fetch('{url}')>",
 )
 MARKER = "__owasp_scanner_echo__"
-ECHO_TIMEOUT_MS = 3000
+ECHO_TIMEOUT_MS = 5000
 INJECTION_SETTLE_MS = 700
 
 OVERLAY_SELECTORS = (
@@ -116,6 +116,21 @@ class XSSScanner:
 
         self._dispatch_input_events(locator)
 
+    def _attempt_submit(self, locator: Locator) -> None:
+        try:
+            locator.press("Enter")
+            return
+        except Exception:
+            pass
+
+        try:
+            self.page.keyboard.press("Enter")
+            return
+        except Exception:
+            pass
+
+        self._submit_via_form(locator)
+
     def _dispatch_input_events(self, locator) -> None:
         try:
             locator.evaluate(
@@ -172,12 +187,11 @@ class XSSScanner:
         self._focus_field(input_field)
         self._enter_text(input_field, payload)
         try:
-            input_field.press("Enter")
-        except Exception:
-            try:
-                self.page.keyboard.press("Enter")
-            except Exception:
-                self._submit_via_form(input_field)
+            with self.page.expect_navigation(wait_until="domcontentloaded", timeout=ECHO_TIMEOUT_MS):
+                self._attempt_submit(input_field)
+        except PlaywrightTimeoutError:
+            self._attempt_submit(input_field)
+
         try:
             self.page.wait_for_load_state("networkidle", timeout=1500)
         except PlaywrightTimeoutError:
@@ -193,40 +207,44 @@ class XSSScanner:
             "payload": payload,
         }
 
-    def _echo_test(self, url: str, field_identifier: str) -> bool:
+    def _echo_test(self, url: str, field_identifier: str) -> Optional[str]:
         self._prepare_page(url)
         locator = self._get_field_locator(field_identifier)
         if locator.count() == 0:
-            return False
+            return None
         input_field = locator.first
         self._focus_field(input_field)
         self._enter_text(input_field, MARKER)
+        navigation_url: Optional[str] = None
         try:
-            input_field.press("Enter")
+            with self.page.expect_navigation(wait_until="domcontentloaded", timeout=ECHO_TIMEOUT_MS) as navigation:
+                self._attempt_submit(input_field)
+            navigation_url = navigation.value.url if navigation.value else None
+        except PlaywrightTimeoutError:
+            self._attempt_submit(input_field)
         except Exception:
-            try:
-                self.page.keyboard.press("Enter")
-            except Exception:
-                self._submit_via_form(input_field)
+            pass
+
         try:
             self.page.wait_for_load_state("networkidle", timeout=1500)
         except PlaywrightTimeoutError:
             pass
         self.page.wait_for_timeout(300)
+        final_url = navigation_url or self.page.url
         try:
             self.page.wait_for_function(
                 "marker => document.body && document.body.innerText.includes(marker)",
                 MARKER,
                 timeout=ECHO_TIMEOUT_MS,
             )
-            return True
+            return final_url
         except PlaywrightTimeoutError:
             pass
 
         # fallback: check full DOM HTML
         try:
             if self.page.evaluate("marker => document.documentElement.outerHTML.includes(marker)", MARKER):
-                return True
+                return final_url
         except Exception:
             pass
 
@@ -236,15 +254,25 @@ class XSSScanner:
             if refreshed_locator.count() > 0:
                 current_value = refreshed_locator.first.input_value()
                 if current_value and MARKER in current_value:
-                    return True
+                    return final_url
         except Exception:
             pass
 
         # fallback: check URL (for cases where payload is reflected in query params)
         if MARKER in self.page.url:
-            return True
+            return final_url
 
-        return False
+        # fallback: if navigation occurred, allow a final scan of body text once more
+        if final_url != url:
+            try:
+                self.page.wait_for_timeout(700)
+                page_text = self.page.locator("body").inner_text()
+                if MARKER in page_text:
+                    return final_url
+            except Exception:
+                pass
+
+        return None
 
     def run(self, form_targets: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         for form in form_targets:
@@ -256,8 +284,9 @@ class XSSScanner:
                 if not field_identifier:
                     continue
                 try:
-                    if self._echo_test(url, field_identifier):
-                        key = (url, field_identifier)
+                    echoed_url = self._echo_test(url, field_identifier)
+                    if echoed_url:
+                        key = (echoed_url, field_identifier)
                         if key not in self._echo_seen:
                             self._echo_seen.add(key)
                             self.successful_echo_fields.append(key)
