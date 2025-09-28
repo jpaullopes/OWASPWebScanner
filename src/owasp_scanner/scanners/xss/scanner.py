@@ -26,9 +26,38 @@ class XSSScanner:
         self.successful_echo_fields: List[Dict[str, str]] = []
         self.injected_payloads: List[Dict[str, str]] = []
 
-    def _apply_payload(self, field_name: str, payload_id: str, template_index: int) -> Dict[str, str]:
+    def _build_selector(self, field_identifier: str) -> str:
+        attr = "name"
+        value = field_identifier
+
+        if "::" in field_identifier:
+            prefix, value = field_identifier.split("::", 1)
+            attr = {
+                "id": "id",
+                "aria": "aria-label",
+                "placeholder": "placeholder",
+                "data-testid": "data-testid",
+            }.get(prefix, "name")
+
+        escaped_value = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f"[{attr}=\"{escaped_value}\"]"
+
+    def _get_field_locator(self, field_identifier: str):
+        selector = self._build_selector(field_identifier)
+        locator = self.page.locator(selector)
+
+        if locator.count() == 0 and "::" in field_identifier:
+            _, value = field_identifier.split("::", 1)
+            fallback_selector = f"[name=\"{value.replace('\\', '\\\\').replace('"', '\\"')}\"]"
+            fallback_locator = self.page.locator(fallback_selector)
+            if fallback_locator.count() > 0:
+                return fallback_locator
+
+        return locator
+
+    def _apply_payload(self, field_identifier: str, payload_id: str, template_index: int) -> Dict[str, str]:
         payload = PAYLOAD_TEMPLATES[template_index].format(url=f"{self.listener_url}?id={payload_id}")
-        locator = self.page.locator(f"[name='{field_name}']")
+        locator = self._get_field_locator(field_identifier)
         if locator.count() == 0:
             return {}
 
@@ -40,14 +69,14 @@ class XSSScanner:
             tracker.injected[payload_id].payload = payload
 
         return {
-            "field": field_name,
+            "field": field_identifier,
             "payload_id": payload_id,
             "payload": payload,
         }
 
-    def _echo_test(self, url: str, field_name: str) -> bool:
+    def _echo_test(self, url: str, field_identifier: str) -> bool:
         self.page.goto(url, timeout=10000)
-        locator = self.page.locator(f"[name='{field_name}']")
+        locator = self._get_field_locator(field_identifier)
         if locator.count() == 0:
             return False
         input_field = locator.first
@@ -62,12 +91,12 @@ class XSSScanner:
             campos: List[str] = form.get("campos", [])
             if not url or not campos:
                 continue
-            for field in campos:
-                if not field:
+            for field_identifier in campos:
+                if not field_identifier:
                     continue
                 try:
-                    if self._echo_test(url, field):
-                        self.successful_echo_fields.append({"url": url, "field": field})
+                    if self._echo_test(url, field_identifier):
+                        self.successful_echo_fields.append({"url": url, "field": field_identifier})
                 except Exception:
                     continue
 
@@ -76,12 +105,12 @@ class XSSScanner:
 
         for item in self.successful_echo_fields:
             url = item["url"]
-            field = item["field"]
+            field_identifier = item["field"]
             self.page.goto(url, timeout=10000)
             for index, _ in enumerate(PAYLOAD_TEMPLATES):
-                payload_id = register_payload(None, field, "", url)
+                payload_id = register_payload(None, field_identifier, "", url)
                 try:
-                    record = self._apply_payload(field, payload_id, index)
+                    record = self._apply_payload(field_identifier, payload_id, index)
                     if record:
                         self.injected_payloads.append(record)
                     self.page.wait_for_timeout(1500)
