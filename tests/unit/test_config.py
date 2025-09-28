@@ -20,6 +20,9 @@ def test_load_configuration_uses_environment(monkeypatch, tmp_path):
     assert config.auth_password == "secret"
     assert config.headless is True
     assert config.report_path == report_path.resolve()
+    assert config.ffuf_verbose is False
+    assert config.sql_verbose is False
+    assert config.sql_timeout == 120
 
 
 def test_load_configuration_defaults(monkeypatch):
@@ -34,3 +37,6 @@ def test_load_configuration_defaults(monkeypatch):
     assert config.auth_email is None
     assert config.auth_password is None
     assert config.headless is False
+    assert config.ffuf_verbose is False
+    assert config.sql_verbose is False
+    assert config.sql_timeout == 120

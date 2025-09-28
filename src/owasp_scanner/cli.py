@@ -21,6 +21,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("-u", "--url", required=True, help="URL do alvo")
     parser.add_argument("--callback-port", type=int, default=8000, help="Porta do servidor de callback")
     parser.add_argument("--report", default="relatorio_spider.json", help="Arquivo de saída do relatório")
+    parser.add_argument("--verbose-ffuf", action="store_true", help="Mostra a execução detalhada do ffuf")
+    parser.add_argument("--verbose-sql", action="store_true", help="Exibe a saída completa do sqlmap")
+    parser.add_argument("--sql-timeout", type=int, default=120, help="Tempo máximo (s) por alvo do sqlmap")
     return parser.parse_args()
 
 
@@ -37,7 +40,13 @@ def print_dependency_status() -> bool:
 
 def run_cli() -> None:
     args = parse_arguments()
-    config = load_configuration(args.url, args.report)
+    config = load_configuration(
+        args.url,
+        args.report,
+        ffuf_verbose=args.verbose_ffuf,
+        sql_verbose=args.verbose_sql,
+        sql_timeout=args.sql_timeout,
+    )
 
     print("[*] Verificando dependências...")
     if not print_dependency_status():
@@ -58,10 +67,13 @@ def run_cli() -> None:
     print(f"[+] Servidor ouvindo em {callback_url}")
 
     print("\n=== [3/4] SQL Injection ===")
-    sql_results = run_sql_scanner(report)
-    for result in sql_results:
-        status = "VULNERÁVEL" if result.vulnerable else "OK"
-        print(f" - {status} :: {result.target}")
+    sql_results = run_sql_scanner(report, verbose=config.sql_verbose, timeout=config.sql_timeout)
+    if sql_results:
+        for result in sql_results:
+            status = "VULNERÁVEL" if result.vulnerable else "OK"
+            print(f" - {status} :: {result.target}")
+    else:
+        print(" - Nenhum alvo de SQL Injection identificado.")
 
     print("\n=== [4/4] XSS ===")
     xss_results = run_xss_scanner(config, report, callback_url)

@@ -21,13 +21,23 @@ class ScannerConfig:
     headless: bool = False
     auth_email: Optional[str] = None
     auth_password: Optional[str] = None
+    ffuf_verbose: bool = False
+    sql_verbose: bool = False
+    sql_timeout: int = 120
 
     @property
     def login_url(self) -> str:
         return urljoin(self.target_url, "/#/login")
 
 
-def load_configuration(target_url: str, report_name: str = "relatorio_spider.json") -> ScannerConfig:
+def load_configuration(
+    target_url: str,
+    report_name: str = "relatorio_spider.json",
+    *,
+    ffuf_verbose: bool = False,
+    sql_verbose: bool = False,
+    sql_timeout: Optional[int] = None,
+) -> ScannerConfig:
     """Builds a ``ScannerConfig`` from CLI input and environment variables."""
 
     load_dotenv()  # Loads .env values if present
@@ -37,6 +47,8 @@ def load_configuration(target_url: str, report_name: str = "relatorio_spider.jso
     auth_email = os.getenv("EMAIL_LOGIN")
     auth_password = os.getenv("PASSWORD_LOGIN")
 
+    timeout_value = sql_timeout if sql_timeout is not None else int(os.getenv("SQLMAP_TIMEOUT", "120"))
+
     return ScannerConfig(
         target_url=target_url.rstrip("/"),
         session_cookie=session_cookie,
@@ -44,4 +56,7 @@ def load_configuration(target_url: str, report_name: str = "relatorio_spider.jso
         headless=os.getenv("HEADLESS", "false").lower() in {"1", "true", "yes"},
         auth_email=auth_email,
         auth_password=auth_password,
+        ffuf_verbose=ffuf_verbose,
+        sql_verbose=sql_verbose,
+        sql_timeout=timeout_value,
     )

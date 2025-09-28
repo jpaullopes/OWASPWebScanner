@@ -58,6 +58,7 @@ def run_ffuf(
     timeout: int = 900,
     filter_sizes: Optional[Sequence[int]] = None,
     auto_filter_size: bool = True,
+    verbose: bool = False,
 ) -> set[str]:
     """Executes ffuf and returns the set of discovered paths."""
 
@@ -104,8 +105,16 @@ def run_ffuf(
         if size > 0:
             command.extend(["-fs", str(size)])
 
+    if verbose:
+        print("[ffuf] comando:", " ".join(command))
+
+    run_kwargs: dict[str, object] = {"check": True}
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        if verbose:
+            subprocess.run(command, **run_kwargs)
+        else:
+            run_kwargs.update({"capture_output": True, "text": True})
+            subprocess.run(command, **run_kwargs)
     except subprocess.CalledProcessError as exc:  # pragma: no cover - relies on ffuf
         raise DirectoryEnumerationError(exc.stderr or exc.stdout) from exc
 
