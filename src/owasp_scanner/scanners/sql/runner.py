@@ -9,7 +9,7 @@ from typing import List
 from ...core.report import ReconReport
 from ...recon.utils import build_cookie_header
 
-SQLMAP_TIMEOUT = 300
+SQLMAP_TIMEOUT = 900
 
 
 @dataclass(slots=True)
