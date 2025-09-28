@@ -12,11 +12,18 @@ dependencies = [
     "python-dotenv"
 ]
 
-[dependency-groups]
+[project.scripts]
+owasp-web-scanner = "owasp_scanner.cli:main"
+
+[project.optional-dependencies]
 dev = [
     "ruff",
-    "sphinx"
+    "sphinx",
+    "pytest"
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 # Define o tamanho máximo de uma linha de código
