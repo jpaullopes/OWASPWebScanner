@@ -12,13 +12,15 @@ Esta seção descreve como os componentes do OWASP Web Scanner interagem, quais 
    - `ScannerConfig`: agrega opções de execução (URL, relatório, cookies, credenciais, modo headless).
    - `load_configuration`: aplica normalização de URL, carrega variáveis do ambiente e do `.env` via `python-dotenv`.
    - `ReconReport`: estrutura compartilhada que armazena resultados do crawler (URLs, formulários, cookies) e é persistida em JSON.
+   - `models.FieldInfo` / `models.FieldAttributes`: dicionários tipados que padronizam como campos de formulário são descritos (identificador + metadados estáveis).
    - `verify_dependencies`: confirma se `sqlmap` e `ffuf` estão disponíveis no `PATH` antes de iniciar o pipeline.
 
 3. **Reconhecimento (`owasp_scanner.recon`)**
-   - `Spider`: utiliza Playwright (Chromium headless) para navegar no alvo, extrair links, formularios e cookies.
-     - Enfileira URLs do mesmo domínio, identifica alvos com query string para SQLi, e salva formulários para XSS.
-     - Caso existam credenciais ou cookie de sessão, autentica a navegação automaticamente.
-   - `run_ffuf`: executa `ffuf` com a wordlist `resources/common_dirs.txt` e adiciona rotas potencialmente sensíveis à lista de verificação de acesso.
+    - `Spider`: utiliza Playwright (Chromium headless) para navegar no alvo, extrair links, formularios e cookies.
+       - Enfileira URLs do mesmo domínio, identifica alvos com query string para SQLi e serializa cada campo de formulário como `FieldInfo` (com atributos como `id`, `placeholder`, `aria-label`, `tag`).
+       - Faz deduplicação por identificador e preserva metadados para que os scanners consigam localizar inputs mesmo quando IDs dinâmicos mudam.
+       - Caso existam credenciais ou cookie de sessão, autentica a navegação automaticamente.
+    - `run_ffuf`: executa `ffuf` com a wordlist `resources/common_dirs.txt` e adiciona rotas potencialmente sensíveis à lista de verificação de acesso.
 
 4. **Servidor de callback (`owasp_scanner.callback.server`)**
    - Instancia um `TCPServer` simples para receber callbacks de payloads XSS.
@@ -54,7 +56,7 @@ flowchart TD
 | Dados                         | Origem                   | Consumidores                              |
 |-------------------------------|--------------------------|-------------------------------------------|
 | `ReconReport.sqli_targets`    | Crawler (links com `?=`) | Scanner SQL (`run_sql_scanner`)           |
-| `ReconReport.xss_forms`       | Crawler (formulários)    | Scanner XSS (`XSSScanner`)                |
+| `ReconReport.xss_forms`       | Crawler (formulários `FieldInfo`) | Scanner XSS (`XSSScanner`) – usa metadados para construir seletores confiáveis |
 | `ReconReport.access_targets`  | `ffuf` / wordlist        | Analisador de acesso (`run_access_analyzer`) |
 | `ReconReport.cookies`         | Login/crawler            | XSS, análise de acesso, futuras etapas    |
 

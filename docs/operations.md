@@ -24,7 +24,7 @@ Durante a execução, a CLI imprime o andamento do pipeline:
 2. **Reconhecimento**: status do crawler Playwright e gravação do relatório.
 3. **Servidor de callback**: inicialização e URL de escuta.
 4. **SQL Injection**: resultado por alvo (`VULNERÁVEL` ou `OK`).
-5. **XSS**: payloads injetados ou ausência de ecos positivos.
+5. **XSS**: logs de eco para cada campo (`<-` refletiu, `~` refletiu mas foi ignorado, `X` sem reflexão) e payloads realmente injetados.
 6. **Análise de acesso**: URLs acessíveis inesperadamente.
 
 ## Execução parcial de etapas

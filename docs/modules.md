@@ -25,6 +25,11 @@ Esta referência resume os principais pacotes do projeto, destacando classes, fu
   - `save(path)`: persiste o JSON em disco.
   - `load(path)`: carrega um relatório previamente gerado.
 
+### `models.py`
+
+- `FieldAttributes`: `TypedDict` com atributos opcionais (`id`, `name`, `placeholder`, `aria_label`, `data_testid`, `type`, `tag`) usados para reidentificar inputs.
+- `FieldInfo`: `TypedDict` que combina `identifier` (string estável com prefixos como `placeholder::` ou `aria::`) e `attributes`.
+
 ### `dependencies.py`
 
 - `REQUIRED_TOOLS`: lista os comandos a validar (`sqlmap`, `ffuf`).
@@ -43,7 +48,8 @@ Esta referência resume os principais pacotes do projeto, destacando classes, fu
 - `Spider`: classe principal do crawling. Métodos internos relevantes:
   - `_bootstrap_session(page)`: injeta cookies fornecidos ou tenta autenticação automática.
   - `_extract_links(page, url)`: adiciona URLs internas ao conjunto de visita e marca alvos potencialmente vulneráveis a SQLi.
-  - `_extract_forms(page)`: coleta campos de formulários para análise de XSS.
+  - `_extract_forms(page)`: converte inputs em `FieldInfo`, priorizando atributos mais estáveis (placeholder, `aria-label`, `data-testid`, `id`) e ignora campos ocultos.
+  - `_register_field_identifier(url, field_info)`: registra o campo tanto para XSS quanto para SQLi reutilizando os metadados estruturados.
   - `run()`: loop de navegação que popula o `ReconReport` e aciona `run_ffuf` ao final.
 
 ### `directory_enum.py`
@@ -73,10 +79,11 @@ Esta referência resume os principais pacotes do projeto, destacando classes, fu
 
 ### XSS (`owasp_scanner.scanners.xss`)
 
-- `XSSScanner`: encapsula a lógica de teste de eco e injeção de payloads via Playwright.
-  - `_echo_test(url, field_name)`: verifica se a entrada aparece na resposta (critério de injeção).
-  - `_apply_payload(field_name, payload_id, template_index)`: injeta payloads baseados em templates e registra no `PayloadTracker`.
-  - `run(form_targets)`: produz uma lista de dicionários com `field`, `payload_id` e `payload` para cada injeção executada.
+- `XSSScanner`: encapsula a lógica de teste de eco e injeção de payloads via Playwright utilizando `FieldInfo`.
+  - `_iter_fields(campos)`: converte cada entrada (dict ou string legacy) em par `(identifier, FieldAttributes)`.
+  - `_echo_test(url, identifier, metadata)`: retorna `EchoResult` informando se houve reflexão e se o campo permanece disponível após a navegação.
+  - `_apply_payload(identifier, payload_id, template_index, metadata)`: injeta payloads com base nos metadados e atualiza o `PayloadTracker` com `field_id` / `field_name` reais quando disponíveis.
+  - `run(form_targets)`: registra eco apenas quando o campo continua presente na página final e injeta payloads nos alvos válidos, retornando dicionários com `field`, `field_id`, `field_name`, `payload_id` e `payload`.
 - `run_xss_scanner(config, report, listener_url)`: função de alto nível que prepara o browser, aplica cookies e executa o `XSSScanner`.
 
 ## Analisador de acesso (`owasp_scanner.access.analyzer`)

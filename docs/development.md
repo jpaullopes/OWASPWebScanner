@@ -51,6 +51,7 @@ tests/unit/             # Testes unitários com pytest
 - Estrutura:
   - `tests/unit/test_config.py`: carga de configuração e variáveis de ambiente.
   - `tests/unit/test_report.py`: serialização/armazenamento do `ReconReport`.
+  - `tests/unit/test_crawler.py`: regras de priorização de identificadores e metadados dos campos coletados pelo crawler.
   - `tests/unit/test_sql_runner.py`: montagem de comandos `sqlmap` e parsing do resultado.
   - `tests/unit/test_utils.py`: helpers genéricos (`build_cookie_header`).
   - `tests/unit/test_access_analyzer.py`: lógica de sessão e validação de URLs.
