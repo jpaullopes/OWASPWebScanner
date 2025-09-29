@@ -12,6 +12,7 @@ from playwright.sync_api import Page, Request, TimeoutError as PlaywrightTimeout
 
 from ..auth.login import login_with_credentials, login_juice_shop_demo
 from ..core.config import ScannerConfig
+from ..core.models import FieldAttributes, FieldInfo
 from ..core.report import ReconReport
 from .directory_enum import run_ffuf, DirectoryEnumerationError
 
@@ -81,9 +82,11 @@ class Spider:
             except Exception:
                 continue
 
-    def _register_field_identifier(self, url: str, identifier: str) -> None:
-        self._add_xss_form(url, [identifier])
-        self._register_sqli_candidates(url, [identifier])
+    def _register_field_identifier(self, url: str, field_info: FieldInfo) -> None:
+        if not field_info:
+            return
+        self._add_xss_form(url, [field_info])
+        self._register_sqli_candidates(url, [field_info])
 
     def _identifier_from_attributes(
         self,
@@ -97,55 +100,114 @@ class Spider:
         if name:
             return name
 
-        for value, prefix in ((element_id, "id::"), (aria, "aria::"), (placeholder, "placeholder::")):
+        priority_attributes = (
+            (data_testid, "data-testid::"),
+            (placeholder, "placeholder::"),
+            (aria, "aria::"),
+        )
+
+        for value, prefix in priority_attributes:
             if value:
                 return f"{prefix}{value}"
 
-        if data_testid:
-            return f"data-testid::{data_testid}"
+        if element_id:
+            return f"id::{element_id}"
 
         return None
 
-    def _identify_field(self, element) -> Optional[str]:
-        try:
-            name_attr = element.get_attribute("name")
-            element_id = element.get_attribute("id")
-            aria = element.get_attribute("aria-label")
-            placeholder = element.get_attribute("placeholder")
-            data_testid = element.get_attribute("data-testid")
-
-            return self._identifier_from_attributes(
-                name=name_attr,
-                element_id=element_id,
-                aria=aria,
-                placeholder=placeholder,
-                data_testid=data_testid,
-            )
-        except Exception:
+    def _build_field_info_from_values(
+        self,
+        *,
+        name: Optional[str],
+        element_id: Optional[str],
+        aria: Optional[str],
+        placeholder: Optional[str],
+        data_testid: Optional[str],
+        field_type: Optional[str] = None,
+        tag: Optional[str] = None,
+    ) -> Optional[FieldInfo]:
+        identifier = self._identifier_from_attributes(
+            name=name,
+            element_id=element_id,
+            aria=aria,
+            placeholder=placeholder,
+            data_testid=data_testid,
+        )
+        if not identifier:
             return None
-        return None
 
-    def _add_xss_form(self, url: str, fields: Iterable[str]) -> None:
-        unique_fields = tuple(dict.fromkeys(f for f in fields if f))
+        attributes: FieldAttributes = {}
+        if name is not None:
+            attributes["name"] = name
+        if element_id is not None:
+            attributes["id"] = element_id
+        if aria is not None:
+            attributes["aria_label"] = aria
+        if placeholder is not None:
+            attributes["placeholder"] = placeholder
+        if data_testid is not None:
+            attributes["data_testid"] = data_testid
+        if field_type:
+            attributes["type"] = field_type.lower()
+        if tag:
+            attributes["tag"] = tag.lower()
+
+        return {"identifier": identifier, "attributes": attributes}
+
+    def _build_field_info(self, element) -> Optional[FieldInfo]:
+        try:
+            tag = element.evaluate("el => el.tagName.toLowerCase()")
+        except Exception:
+            tag = None
+
+        def _safe_attr(attr: str) -> Optional[str]:
+            try:
+                return element.get_attribute(attr)
+            except Exception:
+                return None
+
+        return self._build_field_info_from_values(
+            name=_safe_attr("name"),
+            element_id=_safe_attr("id"),
+            aria=_safe_attr("aria-label"),
+            placeholder=_safe_attr("placeholder"),
+            data_testid=_safe_attr("data-testid"),
+            field_type=_safe_attr("type"),
+            tag=tag,
+        )
+
+    def _add_xss_form(self, url: str, fields: Iterable[FieldInfo]) -> None:
+        unique_fields: list[FieldInfo] = []
+        identifiers_order: list[str] = []
+        seen_identifiers: set[str] = set()
+
+        for field in fields:
+            identifier = field.get("identifier")
+            if not identifier or identifier in seen_identifiers:
+                continue
+            unique_fields.append(field)
+            identifiers_order.append(identifier)
+            seen_identifiers.add(identifier)
+
         if not unique_fields:
             return
-        key = (url, unique_fields)
+
+        key = (url, tuple(identifiers_order))
         if key in self._xss_seen:
             return
         self._xss_seen.add(key)
-        self.report.xss_forms.append({"url_de_envio": url, "campos": list(unique_fields)})
+        self.report.xss_forms.append({"url_de_envio": url, "campos": unique_fields})
 
-    def _derive_param_names(self, fields: Sequence[str]) -> Tuple[str, ...]:
+    def _derive_param_names(self, fields: Sequence[FieldInfo]) -> Tuple[str, ...]:
         ordered: dict[str, None] = {}
         for field in fields:
-            if not field:
-                continue
-            if "::" in field:
-                continue
-            ordered.setdefault(field, None)
+            attributes = field.get("attributes", {})
+            name = attributes.get("name")
+            if name:
+                ordered.setdefault(name, None)
         return tuple(ordered.keys())
 
-    def _register_sqli_candidates(self, submit_url: str, fields: Sequence[str]) -> None:
+    def _register_sqli_candidates(self, submit_url: str, fields: Sequence[FieldInfo]) -> None:
         param_names = self._derive_param_names(fields)
         if not param_names:
             return
@@ -159,22 +221,22 @@ class Spider:
         for form in forms:
             try:
                 action = form.get_attribute("action") or page.url
-                method = (form.get_attribute("method") or "get").lower()
-
                 inputs = form.locator("input, textarea, select").all()
-                fields: list[str] = []
-                query_param_names: list[str] = []
+                fields: list[FieldInfo] = []
 
                 for element in inputs:
-                    name_attr = element.get_attribute("name")
-                    if name_attr:
-                        fields.append(name_attr)
-                        query_param_names.append(name_attr)
+                    field_info = self._build_field_info(element)
+                    if not field_info:
                         continue
 
-                    identifier = self._identify_field(element)
-                    if identifier:
-                        fields.append(identifier)
+                    attributes = field_info.get("attributes", {})
+                    tag = (attributes.get("tag") or "").lower()
+                    input_type = (attributes.get("type") or "").lower()
+
+                    if tag == "input" and input_type in IGNORED_INPUT_TYPES:
+                        continue
+
+                    fields.append(field_info)
 
                 if not fields:
                     continue
@@ -182,12 +244,6 @@ class Spider:
                 submit_url = urljoin(self.config.target_url, action)
                 self._add_xss_form(submit_url, fields)
                 self._register_sqli_candidates(submit_url, fields)
-
-                if method == "get" and query_param_names:
-                    base_url = submit_url.split("#", 1)[0]
-                    join_char = "&" if "?" in base_url else "?"
-                    query = "&".join(f"{name}=FUZZ" for name in query_param_names)
-                    self.report.sqli_targets.add(f"{base_url}{join_char}{query}")
             except Exception:
                 continue
 
@@ -204,17 +260,18 @@ class Spider:
             except Exception:
                 continue
 
-            try:
-                input_type = (element.get_attribute("type") or "").lower()
-            except Exception:
-                input_type = ""
-
-            if input_type in IGNORED_INPUT_TYPES:
+            field_info = self._build_field_info(element)
+            if not field_info:
                 continue
 
-            identifier = self._identify_field(element)
-            if identifier:
-                self._register_field_identifier(page.url, identifier)
+            attributes = field_info.get("attributes", {})
+            tag = (attributes.get("tag") or "").lower()
+            input_type = (attributes.get("type") or "").lower()
+
+            if tag == "input" and input_type in IGNORED_INPUT_TYPES:
+                continue
+
+            self._register_field_identifier(page.url, field_info)
 
         # Static parsing fallback using BeautifulSoup for dynamically rendered inputs
         try:
@@ -227,20 +284,23 @@ class Spider:
             if tag.find_parent("form"):
                 continue
 
+            tag_name = tag.name.lower() if tag.name else None
             input_type = (tag.get("type") or "").lower()
-            if input_type in IGNORED_INPUT_TYPES:
+            if tag_name == "input" and input_type in IGNORED_INPUT_TYPES:
                 continue
 
-            identifier = self._identifier_from_attributes(
+            field_info = self._build_field_info_from_values(
                 name=tag.get("name"),
                 element_id=tag.get("id"),
                 aria=tag.get("aria-label"),
                 placeholder=tag.get("placeholder"),
                 data_testid=tag.get("data-testid"),
+                field_type=input_type,
+                tag=tag_name,
             )
 
-            if identifier:
-                self._register_field_identifier(page.url, identifier)
+            if field_info:
+                self._register_field_identifier(page.url, field_info)
 
     def _queue_url(self, url: str) -> None:
         if url not in self._visited:
