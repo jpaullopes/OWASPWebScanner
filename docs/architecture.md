@@ -29,6 +29,7 @@ Esta seção descreve como os componentes do OWASP Web Scanner interagem, quais 
 5. **Scanners de SQL Injection e XSS (`owasp_scanner.scanners`)**
    - SQLi: para cada URL com parâmetros, roda `sqlmap` em modo batch e identifica indícios de vulnerabilidade no stdout.
    - XSS: utiliza Playwright para testes de eco e injeta payloads com rastreamento pelo servidor de callback.
+   - XSSStrike (opcional): consome os mesmos formulários estruturados (`FieldInfo`) para rodar fuzzing adicional via ferramenta `xssstrike`, ampliando a cobertura de payloads automatizados.
 
 6. **Analisador de controle de acesso (`owasp_scanner.access.analyzer`)**
    - Reaproveita os cookies coletados para testar, em paralelo, se URLs supostamente restritas estão acessíveis.

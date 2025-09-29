@@ -14,6 +14,7 @@ from .core.report import ReconReport
 from .recon.crawler import Spider
 from .scanners.sql.runner import run_sql_scanner
 from .scanners.xss.runner import run_xss_scanner
+from .scanners.xssstrike import run_xssstrike_scanner
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -52,7 +53,7 @@ def run_cli() -> None:
     if not print_dependency_status():
         return
 
-    print("\n=== [1/4] Reconhecimento ===")
+    print("\n=== [1/5] Reconhecimento ===")
     spider = Spider(config)
     report = spider.run()
     report_path = Path(config.report_path)
@@ -62,11 +63,11 @@ def run_cli() -> None:
     callback_server = CallbackServer(args.callback_port, tracker)
     callback_url = f"http://localhost:{args.callback_port}"
 
-    print("\n=== [2/4] Servidor de Callback ===")
+    print("\n=== [2/5] Servidor de Callback ===")
     callback_server.start()
     print(f"[+] Servidor ouvindo em {callback_url}")
 
-    print("\n=== [3/4] SQL Injection ===")
+    print("\n=== [3/5] SQL Injection ===")
     sql_results = run_sql_scanner(report, verbose=config.sql_verbose, timeout=config.sql_timeout)
     if sql_results:
         for result in sql_results:
@@ -75,13 +76,26 @@ def run_cli() -> None:
     else:
         print(" - Nenhum alvo de SQL Injection identificado.")
 
-    print("\n=== [4/4] XSS ===")
+    print("\n=== [4/5] XSS (Playwright) ===")
     xss_results = run_xss_scanner(config, report, callback_url)
     if xss_results:
         for entry in xss_results:
             print(f" - Payload {entry['payload_id']} em {entry['field']}")
     else:
         print(" - Nenhum campo com eco positivo foi identificado.")
+
+    print("\n=== [5/5] XSSStrike ===")
+    xssstrike_result = run_xssstrike_scanner(config, report)
+    if xssstrike_result.skipped_reason:
+        print(f" - {xssstrike_result.skipped_reason}")
+    elif xssstrike_result.results:
+        for finding in xssstrike_result.results:
+            status = "VULNERÁVEL" if finding.get("vulnerable") else "OK"
+            parametro = finding.get("parameter")
+            url = finding.get("url")
+            print(f" - {status} :: {parametro} em {url}")
+    else:
+        print(" - Nenhum alvo processado pelo XSSStrike.")
 
     print("\n=== Análise de Acesso ===")
     accessible = run_access_analyzer(config, report)

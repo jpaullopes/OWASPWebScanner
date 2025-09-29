@@ -85,6 +85,7 @@ Esta referência resume os principais pacotes do projeto, destacando classes, fu
   - `_apply_payload(identifier, payload_id, template_index, metadata)`: injeta payloads com base nos metadados e atualiza o `PayloadTracker` com `field_id` / `field_name` reais quando disponíveis.
   - `run(form_targets)`: registra eco apenas quando o campo continua presente na página final e injeta payloads nos alvos válidos, retornando dicionários com `field`, `field_id`, `field_name`, `payload_id` e `payload`.
 - `run_xss_scanner(config, report, listener_url)`: função de alto nível que prepara o browser, aplica cookies e executa o `XSSScanner`.
+- **Integração opcional com XSSStrike** (`owasp_scanner.scanners.xssstrike`): módulo planejado que recebe os mesmos `FieldInfo`, invoca o binário `xssstrike` para fuzzing de XSS e consolida descobertas adicionais antes de gerar relatórios.
 
 ## Analisador de acesso (`owasp_scanner.access.analyzer`)
 
