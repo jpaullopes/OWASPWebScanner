@@ -88,12 +88,12 @@ def run_cli() -> None:
     xssstrike_result = run_xssstrike_scanner(config, report)
     if xssstrike_result.skipped_reason:
         print(f" - {xssstrike_result.skipped_reason}")
-    elif xssstrike_result.results:
-        for finding in xssstrike_result.results:
-            status = "VULNERÁVEL" if finding.get("vulnerable") else "OK"
-            parametro = finding.get("parameter")
-            url = finding.get("url")
-            print(f" - {status} :: {parametro} em {url}")
+    elif xssstrike_result.findings:
+        for finding in xssstrike_result.findings:
+            status = "VULNERÁVEL" if finding.vulnerable else "OK"
+            print(f" - {status} :: {finding.parameter} em {finding.url}")
+            if finding.error:
+                print(f"   Erro: {finding.error}")
     else:
         print(" - Nenhum alvo processado pelo XSSStrike.")
 

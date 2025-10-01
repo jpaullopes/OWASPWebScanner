@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -25,11 +25,25 @@ class XSSStrikeTarget:
     parameter: str
 
 
+@dataclass(frozen=True)
+class XSSStrikeFinding:
+    """Details about a single XSSStrike execution against a field."""
+
+    field_identifier: str
+    parameter: str
+    url: str
+    command: List[str]
+    vulnerable: bool
+    returncode: int
+    output: str
+    error: Optional[str] = None
+
+
 @dataclass
 class XSSStrikeRunResult:
     """Outcome of running the XSSStrike integration."""
 
-    results: List[dict]
+    findings: List[XSSStrikeFinding] = field(default_factory=list)
     skipped_reason: Optional[str] = None
 
 
@@ -120,6 +134,16 @@ def _trim_output(output: str, limit: int = 2000) -> str:
     return f"{output[:limit]}\n...[truncated]..."
 
 
+def _execute_xssstrike(command: List[str], *, timeout: int) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
 def run_xssstrike_scanner(
     config: ScannerConfig,
     report: ReconReport,
@@ -129,58 +153,59 @@ def run_xssstrike_scanner(
     """Runs XSSStrike for each discovered XSS target when available."""
 
     if not report.xss_forms:
-        return XSSStrikeRunResult(results=[])
+        return XSSStrikeRunResult()
 
     executable = shutil.which("xssstrike")
     if not executable:
-        return XSSStrikeRunResult(results=[], skipped_reason="xssstrike não encontrado no PATH.")
+        return XSSStrikeRunResult(skipped_reason="xssstrike não encontrado no PATH.")
 
     targets = _build_targets(report.xss_forms)
     if not targets:
-        return XSSStrikeRunResult(results=[], skipped_reason="Nenhum alvo compatível para XSSStrike.")
+        return XSSStrikeRunResult(skipped_reason="Nenhum alvo compatível para XSSStrike.")
 
-    results: List[dict] = []
+    findings: List[XSSStrikeFinding] = []
 
     for target in targets:
         command = [executable, "-u", target.target_url, "--crawl", "--skip-dom"]
         try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
+            completed = _execute_xssstrike(command, timeout=timeout)
         except subprocess.TimeoutExpired:
-            results.append(
-                {
-                    "field": target.field_identifier,
-                    "parameter": target.parameter,
-                    "url": target.target_url,
-                    "vulnerable": False,
-                    "error": f"Tempo limite excedido após {timeout}s",
-                }
+            findings.append(
+                XSSStrikeFinding(
+                    field_identifier=target.field_identifier,
+                    parameter=target.parameter,
+                    url=target.target_url,
+                    command=command,
+                    vulnerable=False,
+                    returncode=-1,
+                    output="",
+                    error=f"Tempo limite excedido após {timeout}s",
+                )
             )
             continue
         except FileNotFoundError:
-            return XSSStrikeRunResult(results=[], skipped_reason="xssstrike não pôde ser executado.")
+            return XSSStrikeRunResult(skipped_reason="xssstrike não pôde ser executado.")
 
-        stdout = completed.stdout.strip()
-        stderr = completed.stderr.strip()
+        stdout = (completed.stdout or "").strip()
+        stderr = (completed.stderr or "").strip()
         combined_output = stdout or stderr
         truncated_output = _trim_output(combined_output)
         vulnerable = "vulnerable" in combined_output.lower()
+        error_message: Optional[str] = None
+        if completed.returncode != 0 and stderr:
+            error_message = _trim_output(stderr)
 
-        results.append(
-            {
-                "field": target.field_identifier,
-                "parameter": target.parameter,
-                "url": target.target_url,
-                "command": command,
-                "vulnerable": vulnerable,
-                "returncode": completed.returncode,
-                "output": truncated_output,
-            }
+        findings.append(
+            XSSStrikeFinding(
+                field_identifier=target.field_identifier,
+                parameter=target.parameter,
+                url=target.target_url,
+                command=command,
+                vulnerable=vulnerable,
+                returncode=completed.returncode,
+                output=truncated_output,
+                error=error_message,
+            )
         )
 
-    return XSSStrikeRunResult(results=results)
+    return XSSStrikeRunResult(findings=findings)

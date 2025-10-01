@@ -4,6 +4,7 @@ from typing import List
 from owasp_scanner.core.config import ScannerConfig
 from owasp_scanner.core.report import ReconReport
 from owasp_scanner.scanners.xssstrike.runner import (
+    XSSStrikeFinding,
     XSSStrikeRunResult,
     XSSStrikeTarget,
     XSSSTRIKE_PARAM_VALUE,
@@ -103,6 +104,7 @@ def test_run_xssstrike_scanner_skips_when_binary_missing(monkeypatch):
     result = run_xssstrike_scanner(_build_config(), report)
     assert isinstance(result, XSSStrikeRunResult)
     assert result.skipped_reason == "xssstrike não encontrado no PATH."
+    assert result.findings == []
 
 
 def test_run_xssstrike_scanner_collects_output(monkeypatch):
@@ -132,23 +134,25 @@ def test_run_xssstrike_scanner_collects_output(monkeypatch):
             self.stderr = ""
             self.returncode = 0
 
-    def fake_run(command, *, capture_output, text, timeout, check):
-        executed_commands.append(command)
+    def fake_run(command, *, timeout):
+        executed_commands.append((command, timeout))
         return DummyCompletedProcess(command[-1])
 
     monkeypatch.setattr(
-        "owasp_scanner.scanners.xssstrike.runner.subprocess.run", fake_run
+        "owasp_scanner.scanners.xssstrike.runner._execute_xssstrike", fake_run
     )
 
     result = run_xssstrike_scanner(_build_config(), report, timeout=15)
 
     assert result.skipped_reason is None
-    assert len(result.results) == 1
-    payload_record = result.results[0]
-    assert payload_record["parameter"] == "token"
-    assert payload_record["vulnerable"] is True
-    assert "Reflected XSS" in payload_record["output"]
-    assert executed_commands and executed_commands[0][0] == "/usr/bin/xssstrike"
+    assert len(result.findings) == 1
+    finding = result.findings[0]
+    assert isinstance(finding, XSSStrikeFinding)
+    assert finding.parameter == "token"
+    assert finding.vulnerable is True
+    assert "Reflected XSS" in finding.output
+    assert executed_commands and executed_commands[0][0][0] == "/usr/bin/xssstrike"
+    assert executed_commands[0][1] == 15
 
 
 def test_run_xssstrike_scanner_reports_no_skip_when_binary_exists(monkeypatch):

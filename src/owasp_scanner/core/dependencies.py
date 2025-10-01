@@ -9,6 +9,7 @@ from typing import Iterable
 REQUIRED_TOOLS: Iterable[tuple[str, list[str]]] = (
     ("sqlmap", ["sqlmap", "--version"]),
     ("ffuf", ["ffuf", "-V"]),
+    ("xssstrike", ["xssstrike", "--help"]),
 )
 
 
