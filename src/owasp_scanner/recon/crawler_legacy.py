@@ -468,6 +468,46 @@ class Spider:
         except Exception:
             return
 
+    # ------------------------------------------------------------------
+    # Internal helpers (refactored)
+    # ------------------------------------------------------------------
+    def _wait_settled(self, page: Page) -> None:
+        """Best-effort wait for the page/network to settle without blocking too long."""
+        try:
+            page.wait_for_load_state("networkidle", timeout=3000)
+        except Exception:
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=1500)
+            except Exception:
+                page.wait_for_timeout(300)
+
+    def _collect_page(self, page: Page, *, auto_click: bool = True) -> None:
+        """Extract all artifacts from the current page URL.
+
+        auto_click: when True perform a single auto-click pass (idempotent via _clicked_router_links).
+        """
+        current_url = page.url
+        if self._is_allowed_url(current_url):
+            if current_url not in self._visited:
+                self.report.discovered_urls.add(current_url)
+        self._extract_links(page, current_url)
+        self._extract_forms(page)
+        self._extract_loose_inputs(page)
+        self._record_cookies(page)
+        if auto_click:
+            self._auto_click_navigations(page)
+
+    def _navigate_and_collect(self, page: Page, url: str) -> None:
+        try:
+            page.goto(url, timeout=8000)
+        except PlaywrightTimeoutError:
+            return
+        except Exception:
+            return
+        self._wait_settled(page)
+        self._visited.add(url)
+        self._collect_page(page, auto_click=True)
+
     def run(self) -> ReconReport:
         self._visited: set[str] = set()
         self._to_visit: set[str] = {self.config.target_url}
@@ -495,24 +535,7 @@ class Spider:
                     current_url = self._to_visit.pop()
                     if current_url in self._visited:
                         continue
-                    try:
-                        page.goto(current_url, timeout=8000)
-                        try:
-                            page.wait_for_load_state("networkidle", timeout=3000)
-                        except Exception:
-                            page.wait_for_timeout(300)
-                        self._visited.add(current_url)
-                        self.report.discovered_urls.add(current_url)
-                        self._extract_links(page, current_url)
-                        self._extract_forms(page)
-                        self._extract_loose_inputs(page)
-                        self._record_cookies(page)
-                        # Auto-click pass para descobrir rotas internas SPA
-                        self._auto_click_navigations(page)
-                    except PlaywrightTimeoutError:
-                        continue
-                    except Exception:
-                        continue
+                    self._navigate_and_collect(page, current_url)
 
                 if ffuf_ran:
                     break
