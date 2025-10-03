@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from ...core.config import ScannerConfig
 from ...core.models import FieldAttributes, FieldInfo
-from ...core.report import ReconReport
+from ...core.report import DalfoxScanArtifact, ReconReport, XssTargetsArtifact
 
 DALFOX_PLACEHOLDER = "FUZZ"
 DEFAULT_TIMEOUT = 120
@@ -42,14 +42,6 @@ class DalfoxFinding:
     @property
     def vulnerable(self) -> bool:
         return bool(self.vulnerabilities)
-
-
-@dataclass
-class DalfoxRunResult:
-    """Outcome of running Dalfox for the discovered forms."""
-
-    findings: List[DalfoxFinding] = field(default_factory=list)
-    skipped_reason: Optional[str] = None
 
 
 def _normalize_action_url(url: str) -> Optional[str]:
@@ -173,26 +165,37 @@ def _execute_dalfox(command: Sequence[str], *, timeout: int) -> subprocess.Compl
 
 def run_dalfox_scanner(
     config: ScannerConfig,
-    report: ReconReport,
+    targets: XssTargetsArtifact | ReconReport,
     *,
     timeout: int = DEFAULT_TIMEOUT,
-) -> DalfoxRunResult:
+) -> DalfoxScanArtifact:
     """Runs Dalfox for each discovered XSS target when available."""
 
-    if not report.xss_forms:
-        return DalfoxRunResult()
+    artifact = targets.as_xss_targets() if isinstance(targets, ReconReport) else targets
+    origin_url = artifact.origin_url or config.target_url
+
+    if not artifact.forms:
+        return DalfoxScanArtifact(origin_url=origin_url or "", findings=[])
 
     executable = shutil.which("dalfox")
     if not executable:
-        return DalfoxRunResult(skipped_reason="dalfox não encontrado no PATH.")
+        return DalfoxScanArtifact(
+            origin_url=origin_url or "",
+            findings=[],
+            skipped_reason="dalfox não encontrado no PATH.",
+        )
 
-    targets = _build_targets(report.xss_forms)
-    if not targets:
-        return DalfoxRunResult(skipped_reason="Nenhum alvo compatível para o Dalfox.")
+    targets_to_scan = _build_targets(artifact.forms)
+    if not targets_to_scan:
+        return DalfoxScanArtifact(
+            origin_url=origin_url or "",
+            findings=[],
+            skipped_reason="Nenhum alvo compatível para o Dalfox.",
+        )
 
     findings: List[DalfoxFinding] = []
 
-    for target in targets:
+    for target in targets_to_scan:
         command = (
             executable,
             "url",
@@ -220,7 +223,11 @@ def run_dalfox_scanner(
             )
             continue
         except FileNotFoundError:
-            return DalfoxRunResult(skipped_reason="dalfox não pôde ser executado.")
+            return DalfoxScanArtifact(
+                origin_url=origin_url or "",
+                findings=[],
+                skipped_reason="dalfox não pôde ser executado.",
+            )
 
         stdout = (completed.stdout or "").strip()
         stderr = (completed.stderr or "").strip()
@@ -245,4 +252,4 @@ def run_dalfox_scanner(
             )
         )
 
-    return DalfoxRunResult(findings=findings)
+    return DalfoxScanArtifact(origin_url=origin_url or "", findings=findings)
