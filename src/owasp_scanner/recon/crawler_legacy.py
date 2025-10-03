@@ -35,6 +35,7 @@ class Spider:
         self._target_host: str = parsed.netloc
         self._target_hostname: str = (parsed.hostname or "").lower()
         self._xss_seen: Set[Tuple[str, Tuple[str, ...]]] = set()
+        self._clicked_router_links: Set[str] = set()
         self.report.seed_url = self.config.target_url
 
     def _filter_cookies(self, cookies: Sequence[dict]) -> list[dict]:
@@ -150,6 +151,74 @@ class Spider:
                 self._queue_url(normalized)
             except Exception:
                 continue
+
+    def _install_history_hook(self, page: Page) -> None:
+        try:
+            page.add_init_script(
+                """
+                (() => {
+                  function wrap(fnName){
+                    const orig = history[fnName];
+                    history[fnName] = function(){
+                      const ret = orig.apply(this, arguments);
+                      window.dispatchEvent(new Event('owasp_history_change'));
+                      return ret;
+                    }
+                  }
+                  wrap('pushState');
+                  wrap('replaceState');
+                  window.addEventListener('hashchange', () => {
+                    window.dispatchEvent(new Event('owasp_history_change'));
+                  });
+                })();
+                """
+            )
+        except Exception:
+            pass
+
+    def _auto_click_navigations(self, page: Page) -> None:
+        # Click elements that likely trigger client-side route changes (SPA)
+        selectors = [
+            'a[href^="#/"]',
+            '[routerlink]:not(a)',
+            'button[routerlink]',
+            'button[onclick*="location" i]',
+            '[role="link"]',
+        ]
+        for sel in selectors:
+            try:
+                elements = page.locator(sel).all()
+            except Exception:
+                continue
+            for el in elements:
+                try:
+                    href = el.get_attribute('href') or el.get_attribute('routerlink') or el.get_attribute('onclick')
+                    if not href:
+                        continue
+                    # Normalize routerlink style hrefs
+                    candidate = href
+                    if candidate.startswith('#'):
+                        candidate = candidate[1:]
+                    if candidate.startswith('/'):
+                        candidate = urljoin(self.config.target_url, candidate)
+                    normalized = self._normalize_link(page.url, candidate)
+                    if not normalized:
+                        continue
+                    if normalized in self._clicked_router_links:
+                        continue
+                    self._clicked_router_links.add(normalized)
+                    # Perform click and allow rendering
+                    el.click(timeout=500)
+                    try:
+                        page.wait_for_load_state('networkidle', timeout=1500)
+                    except Exception:
+                        page.wait_for_timeout(150)
+                    # Re-collect after navigation
+                    self._extract_forms(page)
+                    self._extract_loose_inputs(page)
+                    self._extract_links(page, page.url)
+                except Exception:
+                    continue
 
     def _register_field_identifier(self, url: str, field_info: FieldInfo) -> None:
         if not field_info:
@@ -408,9 +477,14 @@ class Spider:
             context = browser.new_context()
             page = context.new_page()
             page.on("request", self._capture_request)
-
+            self._install_history_hook(page)
             try:
                 self._bootstrap_session(page)
+            except Exception:
+                pass
+            # Listener para mudanças de histórico gerando nova coleta leve
+            try:
+                page.expose_function("__owasp_history_ping", lambda: None)
             except Exception:
                 pass
 
@@ -433,6 +507,8 @@ class Spider:
                         self._extract_forms(page)
                         self._extract_loose_inputs(page)
                         self._record_cookies(page)
+                        # Auto-click pass para descobrir rotas internas SPA
+                        self._auto_click_navigations(page)
                     except PlaywrightTimeoutError:
                         continue
                     except Exception:
