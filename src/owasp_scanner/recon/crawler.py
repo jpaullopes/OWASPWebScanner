@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Optional, Sequence, Set, Tuple
+from typing import Iterable, List, Optional, Sequence, Set, Tuple
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
+import scrapy
 from bs4 import BeautifulSoup
-
-from playwright.sync_api import Page, Request, TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import sync_playwright
+from scrapy.crawler import CrawlerProcess
+from scrapy.http import Response
+from scrapy.utils.reactor import install_reactor
+from twisted.internet.error import ReactorAlreadyInstalledError
 
 from ..auth.login import login_with_credentials, login_juice_shop_demo
 from ..core.config import ScannerConfig
 from ..core.models import FieldAttributes, FieldInfo
 from ..core.report import ReconReport
-from .directory_enum import run_ffuf, DirectoryEnumerationError
+from .directory_enum import DirectoryEnumerationError, run_ffuf
 
 
 IGNORED_INPUT_TYPES = {"hidden", "submit", "button", "reset", "image"}
@@ -29,59 +33,81 @@ class Spider:
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.config.target_url)
-        self._target_host: str = parsed.netloc
-        self._xss_seen: Set[Tuple[str, Tuple[str, ...]]] = set()
+        self._target_host = parsed.netloc
+        self._reset_runtime_state(preserve_report=True)
 
-    def _record_cookies(self, page: Page) -> None:
+    def _reset_runtime_state(self, *, preserve_report: bool = False) -> None:
+        if not preserve_report:
+            self.report = ReconReport()
+        self._xss_seen = set()
+        self._seen_urls = set()
+        self._initial_cookies = []
+        self._ffuf_urls = set()
+
+    # ------------------------------------------------------------------
+    # Session preparation
+    # ------------------------------------------------------------------
+    def _prepare_initial_cookies(self) -> None:
+        """Bootstrap cookies using the existing Playwright helpers."""
+
         try:
-            self.report.cookies = page.context.cookies()
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=self.config.headless)
+                context = browser.new_context()
+                page = context.new_page()
+                domain = urlparse(self.config.target_url).hostname
+
+                cookies: Optional[List[dict]] = None
+
+                if self.config.session_cookie and domain:
+                    name, _, value = self.config.session_cookie.partition("=")
+                    if name and value:
+                        context.add_cookies(
+                            [
+                                {
+                                    "name": name.strip(),
+                                    "value": value.strip(),
+                                    "domain": domain,
+                                    "path": "/",
+                                }
+                            ]
+                        )
+                        page.goto(self.config.target_url, timeout=10000)
+                        cookies = context.cookies()
+                elif self.config.auth_email and self.config.auth_password:
+                    cookies = login_with_credentials(
+                        page,
+                        self.config.login_url,
+                        self.config.auth_email,
+                        self.config.auth_password,
+                    )
+                else:
+                    cookies = login_juice_shop_demo(page, self.config.target_url)
+
+                if cookies:
+                    self._initial_cookies = list(cookies)
+                    self.report.cookies = list(cookies)
+
+                browser.close()
         except Exception:
-            self.report.cookies = []
+            # Fallback gracefully when Playwright login is not available.
+            self._initial_cookies = self.report.cookies or []
 
-    def _bootstrap_session(self, page: Page) -> None:
-        domain = urlparse(self.config.target_url).hostname
-        if self.config.session_cookie and domain:
-            name, _, value = self.config.session_cookie.partition("=")
-            page.context.add_cookies([
-                {
-                    "name": name.strip(),
-                    "value": value.strip(),
-                    "domain": domain,
-                    "path": "/",
-                }
-            ])
-            page.goto(self.config.target_url, timeout=10000)
-            self._record_cookies(page)
-            return
+    def _maybe_run_ffuf(self) -> None:
+        try:
+            discovered = run_ffuf(
+                self.config.target_url,
+                self.report.cookies,
+                verbose=self.config.ffuf_verbose,
+            )
+            self.report.access_targets.update(discovered)
+            self._ffuf_urls = set(discovered)
+        except DirectoryEnumerationError:
+            self._ffuf_urls = set()
 
-        if self.config.auth_email and self.config.auth_password:
-            cookies = login_with_credentials(page, self.config.login_url, self.config.auth_email, self.config.auth_password)
-            if cookies:
-                self.report.cookies = cookies
-                return
-
-        cookies = login_juice_shop_demo(page, self.config.target_url)
-        if cookies:
-            self.report.cookies = cookies
-
-    def _extract_links(self, page: Page, url: str) -> None:
-        anchors = page.locator("a").all()
-        for anchor in anchors:
-            try:
-                href = anchor.get_attribute("href")
-                if not href:
-                    continue
-                full_url = urljoin(self.config.target_url, href)
-                if urlparse(full_url).netloc != urlparse(self.config.target_url).netloc:
-                    continue
-                if "commit" in full_url or "github" in full_url:
-                    continue
-                if "?" in full_url and "=" in full_url:
-                    self.report.sqli_targets.add(full_url)
-                self._queue_url(full_url)
-            except Exception:
-                continue
-
+    # ------------------------------------------------------------------
+    # Helper builders reused by unit tests
+    # ------------------------------------------------------------------
     def _register_field_identifier(self, url: str, field_info: FieldInfo) -> None:
         if not field_info:
             return
@@ -154,28 +180,6 @@ class Spider:
 
         return {"identifier": identifier, "attributes": attributes}
 
-    def _build_field_info(self, element) -> Optional[FieldInfo]:
-        try:
-            tag = element.evaluate("el => el.tagName.toLowerCase()")
-        except Exception:
-            tag = None
-
-        def _safe_attr(attr: str) -> Optional[str]:
-            try:
-                return element.get_attribute(attr)
-            except Exception:
-                return None
-
-        return self._build_field_info_from_values(
-            name=_safe_attr("name"),
-            element_id=_safe_attr("id"),
-            aria=_safe_attr("aria-label"),
-            placeholder=_safe_attr("placeholder"),
-            data_testid=_safe_attr("data-testid"),
-            field_type=_safe_attr("type"),
-            tag=tag,
-        )
-
     def _add_xss_form(self, url: str, fields: Iterable[FieldInfo]) -> None:
         unique_fields: list[FieldInfo] = []
         identifiers_order: list[str] = []
@@ -216,97 +220,79 @@ class Spider:
         query = "&".join(f"{name}=FUZZ" for name in param_names)
         self.report.sqli_targets.add(f"{base_url}{join_char}{query}")
 
-    def _extract_forms(self, page: Page) -> None:
-        forms = page.locator("form").all()
-        for form in forms:
-            try:
-                action = form.get_attribute("action") or page.url
-                inputs = form.locator("input, textarea, select").all()
-                fields: list[FieldInfo] = []
+    # ------------------------------------------------------------------
+    # HTML parsing utilities
+    # ------------------------------------------------------------------
+    def _normalize_link(self, base_url: str, href: str) -> Optional[str]:
+        if not href:
+            return None
+        joined = urljoin(base_url, href)
+        parsed = urlparse(joined)
+        if parsed.netloc != self._target_host:
+            return None
+        sanitized = parsed._replace(fragment="")
+        return urlunparse(sanitized)
 
-                for element in inputs:
-                    field_info = self._build_field_info(element)
-                    if not field_info:
-                        continue
+    def _record_link_targets(self, url: str) -> None:
+        if "?" in url and "=" in url:
+            self.report.sqli_targets.add(url)
 
-                    attributes = field_info.get("attributes", {})
-                    tag = (attributes.get("tag") or "").lower()
-                    input_type = (attributes.get("type") or "").lower()
+    def _extract_forms_from_soup(self, soup: BeautifulSoup, base_url: str) -> None:
+        for form in soup.find_all("form"):
+            action = form.get("action") or base_url
+            fields: List[FieldInfo] = []
 
-                    if tag == "input" and input_type in IGNORED_INPUT_TYPES:
-                        continue
+            for element in form.find_all(["input", "textarea", "select"]):
+                tag_name = element.name.lower() if element.name else None
+                input_type = (element.get("type") or "").lower()
 
+                if tag_name == "input" and input_type in IGNORED_INPUT_TYPES:
+                    continue
+
+                field_info = self._build_field_info_from_values(
+                    name=element.get("name"),
+                    element_id=element.get("id"),
+                    aria=element.get("aria-label"),
+                    placeholder=element.get("placeholder"),
+                    data_testid=element.get("data-testid"),
+                    field_type=input_type,
+                    tag=tag_name,
+                )
+
+                if field_info:
                     fields.append(field_info)
 
-                if not fields:
-                    continue
-
-                submit_url = urljoin(self.config.target_url, action)
-                self._add_xss_form(submit_url, fields)
-                self._register_sqli_candidates(submit_url, fields)
-            except Exception:
+            if not fields:
                 continue
 
-    def _extract_loose_inputs(self, page: Page) -> None:
-        try:
-            elements = page.locator("input, textarea, select").element_handles()
-        except Exception:
-            elements = []
+            submit_url = urljoin(base_url, action)
+            self._add_xss_form(submit_url, fields)
+            self._register_sqli_candidates(submit_url, fields)
 
-        for element in elements:
-            try:
-                if element.evaluate("(el) => el.closest('form') !== null"):
-                    continue
-            except Exception:
+    def _extract_loose_inputs_from_soup(self, soup: BeautifulSoup, page_url: str) -> None:
+        for element in soup.find_all(["input", "textarea", "select"]):
+            if element.find_parent("form"):
                 continue
 
-            field_info = self._build_field_info(element)
-            if not field_info:
-                continue
-
-            attributes = field_info.get("attributes", {})
-            tag = (attributes.get("tag") or "").lower()
-            input_type = (attributes.get("type") or "").lower()
-
-            if tag == "input" and input_type in IGNORED_INPUT_TYPES:
-                continue
-
-            self._register_field_identifier(page.url, field_info)
-
-        # Static parsing fallback using BeautifulSoup for dynamically rendered inputs
-        try:
-            html = page.content()
-        except Exception:
-            return
-
-        soup = BeautifulSoup(html, "html.parser")
-        for tag in soup.find_all(["input", "textarea", "select"]):
-            if tag.find_parent("form"):
-                continue
-
-            tag_name = tag.name.lower() if tag.name else None
-            input_type = (tag.get("type") or "").lower()
+            tag_name = element.name.lower() if element.name else None
+            input_type = (element.get("type") or "").lower()
             if tag_name == "input" and input_type in IGNORED_INPUT_TYPES:
                 continue
 
             field_info = self._build_field_info_from_values(
-                name=tag.get("name"),
-                element_id=tag.get("id"),
-                aria=tag.get("aria-label"),
-                placeholder=tag.get("placeholder"),
-                data_testid=tag.get("data-testid"),
+                name=element.get("name"),
+                element_id=element.get("id"),
+                aria=element.get("aria-label"),
+                placeholder=element.get("placeholder"),
+                data_testid=element.get("data-testid"),
                 field_type=input_type,
                 tag=tag_name,
             )
 
             if field_info:
-                self._register_field_identifier(page.url, field_info)
+                self._register_field_identifier(page_url, field_info)
 
-    def _queue_url(self, url: str) -> None:
-        if url not in self._visited:
-            self._to_visit.add(url)
-
-    def _capture_request(self, request: Request) -> None:
+    def _capture_request(self, request) -> None:
         try:
             parsed = urlparse(request.url)
             if not parsed.netloc or parsed.netloc != self._target_host:
@@ -325,58 +311,119 @@ class Spider:
         except Exception:
             return
 
-    def run(self) -> ReconReport:
-        self._visited: set[str] = set()
-        self._to_visit: set[str] = {self.config.target_url}
-
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=self.config.headless)
-            context = browser.new_context()
-            page = context.new_page()
-            page.on("request", self._capture_request)
-
+    async def _page_init_callback(self, page, request) -> None:
+        if self._initial_cookies:
             try:
-                self._bootstrap_session(page)
+                await page.context.add_cookies(self._initial_cookies)
+            except Exception:
+                pass
+        page.on("request", self._capture_request)
+
+    async def _handle_response(self, response: Response) -> List[str]:
+        url = response.url
+        self._seen_urls.add(url)
+        self._record_link_targets(url)
+
+        html = response.text or ""
+        soup = BeautifulSoup(html, "html.parser")
+        self._extract_forms_from_soup(soup, url)
+        self._extract_loose_inputs_from_soup(soup, url)
+        new_links: List[str] = []
+        for anchor in soup.find_all("a"):
+            href = anchor.get("href")
+            normalized = self._normalize_link(url, href)
+            if not normalized:
+                continue
+            self._record_link_targets(normalized)
+            if normalized not in self._seen_urls:
+                self._seen_urls.add(normalized)
+                new_links.append(normalized)
+
+        page = response.meta.get("playwright_page")
+        if page:
+            try:
+                cookies = await page.context.cookies()
+                if cookies:
+                    self.report.cookies = cookies
             except Exception:
                 pass
 
-            ffuf_ran = False
+        return new_links
 
-            while self._to_visit or not ffuf_ran:
-                while self._to_visit:
-                    current_url = self._to_visit.pop()
-                    if current_url in self._visited:
-                        continue
-                    try:
-                        page.goto(current_url, timeout=8000)
-                        page.wait_for_timeout(500)
-                        self._visited.add(current_url)
-                        self._extract_links(page, current_url)
-                        self._extract_forms(page)
-                        self._extract_loose_inputs(page)
-                        self._record_cookies(page)
-                    except PlaywrightTimeoutError:
-                        continue
-                    except Exception:
-                        continue
+    # ------------------------------------------------------------------
+    # Orchestration
+    # ------------------------------------------------------------------
+    def _build_playwright_meta(self) -> dict:
+        return {
+            "playwright": True,
+            "playwright_include_page": True,
+            "playwright_page_init_callback": self._page_init_callback,
+        }
 
-                if ffuf_ran:
-                    break
+    def _build_start_urls(self) -> List[str]:
+        ordered = [self.config.target_url]
+        for url in sorted(self._ffuf_urls):
+            if url not in ordered:
+                ordered.append(url)
+        return ordered
 
-                try:
-                    discovered = run_ffuf(
-                        self.config.target_url,
-                        self.report.cookies,
-                        verbose=self.config.ffuf_verbose,
-                    )
-                    self.report.access_targets.update(discovered)
-                    for url in discovered:
-                        self._queue_url(url)
-                except DirectoryEnumerationError:
-                    pass
+    def run(self, *, preserve_report: bool = False) -> ReconReport:
+        self._reset_runtime_state(preserve_report=preserve_report)
 
-                ffuf_ran = True
+        self._prepare_initial_cookies()
+        self._maybe_run_ffuf()
 
-            browser.close()
+        start_urls = self._build_start_urls()
+        self._seen_urls.update(start_urls)
+
+        try:
+            install_reactor("twisted.internet.asyncioreactor.AsyncioSelectorReactor")
+        except ReactorAlreadyInstalledError:
+            pass
+
+        settings = {
+            "TWISTED_REACTOR": "twisted.internet.asyncioreactor.AsyncioSelectorReactor",
+            "DOWNLOAD_HANDLERS": {
+                "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+                "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+            },
+            "PLAYWRIGHT_BROWSER_TYPE": "chromium",
+            "PLAYWRIGHT_LAUNCH_OPTIONS": {"headless": self.config.headless},
+            "LOG_ENABLED": False,
+            "ROBOTSTXT_OBEY": False,
+            "USER_AGENT": "OWASPWebScanner/1.0",
+        }
+
+        process = CrawlerProcess(settings=settings)
+        process.crawl(_ScrapyReconSpider, state=self, start_urls=start_urls)
+        process.start()
 
         return self.report
+
+
+class _ScrapyReconSpider(scrapy.Spider):
+    name = "owasp_recon"
+
+    def __init__(self, state: Spider, start_urls: Sequence[str], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.state = state
+        self.start_urls = list(start_urls)
+
+    def start_requests(self):
+        for url in self.start_urls:
+            meta = dict(self.state._build_playwright_meta())
+            yield scrapy.Request(url, callback=self.parse, meta=meta, dont_filter=True)
+
+    async def parse(self, response: Response):
+        new_links = await self.state._handle_response(response)
+
+        page = response.meta.get("playwright_page")
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
+
+        for url in new_links:
+            meta = dict(self.state._build_playwright_meta())
+            yield scrapy.Request(url, callback=self.parse, meta=meta, dont_filter=True)
