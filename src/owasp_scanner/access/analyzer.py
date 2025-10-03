@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import concurrent.futures
-from typing import List
+from typing import Iterable, List
 
 import requests
 
 from ..core.config import ScannerConfig
-from ..core.report import ReconReport
+from ..core.report import AccessAnalysisArtifact, AccessTargetsArtifact, ReconReport
 
 MAX_THREADS = 15
 
 
-def _prepare_session(report: ReconReport) -> requests.Session:
+def _prepare_session(cookies: Iterable[dict]) -> requests.Session:
     session = requests.Session()
-    for cookie in report.cookies:
+    for cookie in cookies:
         name = cookie.get("name")
         value = cookie.get("value")
         domain = cookie.get("domain")
@@ -34,20 +34,25 @@ def _check_url(session: requests.Session, url: str) -> str | None:
     return None
 
 
-def run_access_analyzer(config: ScannerConfig, report: ReconReport) -> List[str]:
+def run_access_analyzer(
+    config: ScannerConfig,  # noqa: ARG001 - config reserved for future use
+    targets: AccessTargetsArtifact | ReconReport,
+) -> AccessAnalysisArtifact:
     """Executes the broken access control checks."""
 
-    if not report.access_targets:
-        return []
+    artifact = targets.as_access_targets() if isinstance(targets, ReconReport) else targets
 
-    session = _prepare_session(report)
+    if not artifact.urls:
+        return AccessAnalysisArtifact(checked_urls=(), accessible_urls=[])
+
+    session = _prepare_session(artifact.cookies)
     accessible: List[str] = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
-        futures = {executor.submit(_check_url, session, url): url for url in sorted(report.access_targets)}
+        futures = {executor.submit(_check_url, session, url): url for url in artifact.urls}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result:
                 accessible.append(result)
 
-    return sorted(accessible)
+    return AccessAnalysisArtifact(checked_urls=artifact.urls, accessible_urls=sorted(accessible))
