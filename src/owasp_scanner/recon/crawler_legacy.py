@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Sequence, Set, Tuple
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
+import logging
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import Page, Request, sync_playwright
@@ -17,6 +18,9 @@ from ..core.report import ReconReport
 from .directory_enum import DirectoryEnumerationError, run_ffuf
 
 IGNORED_INPUT_TYPES = {"hidden", "submit", "button", "reset", "image"}
+EXCLUDED_HOST_KEYWORDS = {"github"}
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,11 +33,28 @@ class Spider:
     def __post_init__(self) -> None:
         parsed = urlparse(self.config.target_url)
         self._target_host: str = parsed.netloc
+        self._target_hostname: str = (parsed.hostname or "").lower()
         self._xss_seen: Set[Tuple[str, Tuple[str, ...]]] = set()
+        self.report.seed_url = self.config.target_url
+
+    def _filter_cookies(self, cookies: Sequence[dict]) -> list[dict]:
+        if not cookies:
+            return []
+        allowed: list[dict] = []
+        allowed_domains = {value for value in (self._target_host, self._target_hostname) if value}
+        suffix = f".{self._target_hostname}" if self._target_hostname else None
+        for cookie in cookies:
+            domain = (cookie.get("domain") or "").lstrip(".").lower()
+            if not domain:
+                continue
+            if domain in allowed_domains or (suffix and domain.endswith(suffix)):
+                allowed.append(cookie)
+        return allowed
 
     def _record_cookies(self, page: Page) -> None:
         try:
-            self.report.cookies = page.context.cookies()
+            cookies = page.context.cookies()
+            self.report.cookies = self._filter_cookies(cookies)
         except Exception:
             self.report.cookies = []
 
@@ -54,7 +75,12 @@ class Spider:
             return
 
         if self.config.auth_email and self.config.auth_password:
-            cookies = login_with_credentials(page, self.config.login_url, self.config.auth_email, self.config.auth_password)
+            cookies = login_with_credentials(
+                page,
+                self.config.login_url,
+                self.config.auth_email,
+                self.config.auth_password,
+            )
             if cookies:
                 self.report.cookies = cookies
                 return
@@ -63,21 +89,65 @@ class Spider:
         if cookies:
             self.report.cookies = cookies
 
+    def _is_allowed_url(self, url: str) -> bool:
+        try:
+            parsed_url = urlparse(url)
+        except Exception:
+            return False
+        host = parsed_url.netloc.lower()
+        hostname = (parsed_url.hostname or "").lower()
+        if parsed_url.scheme and parsed_url.scheme not in {"http", "https", ""}:
+            return False
+        if host:
+            if host.lower() != self._target_host.lower() and (
+                not hostname or hostname != self._target_hostname
+            ):
+                return False
+        elif hostname:
+            if hostname != self._target_hostname:
+                return False
+        candidate = host or hostname
+        if candidate and any(keyword in candidate for keyword in EXCLUDED_HOST_KEYWORDS):
+            return False
+        return True
+
+    def _normalize_link(self, base_url: str, href: Optional[str]) -> Optional[str]:
+        if not href:
+            return None
+        joined = urljoin(base_url, href)
+        if not self._is_allowed_url(joined):
+            return None
+        parsed = urlparse(joined)
+        keep_fragment = bool(parsed.fragment and parsed.fragment.startswith("/"))
+        sanitized = parsed if keep_fragment else parsed._replace(fragment="")
+        return urlunparse(sanitized)
+
+    def _record_link_targets(self, url: str) -> None:
+        if "?" in url and "=" in url and self._is_allowed_url(url):
+            self.report.sqli_targets.add(url)
+
     def _extract_links(self, page: Page, url: str) -> None:
+        # Traditional anchors
         anchors = page.locator("a").all()
         for anchor in anchors:
             try:
-                href = anchor.get_attribute("href")
-                if not href:
+                href = anchor.get_attribute("href") or anchor.get_attribute("routerlink")
+                normalized = self._normalize_link(url, href)
+                if not normalized:
                     continue
-                full_url = urljoin(self.config.target_url, href)
-                if urlparse(full_url).netloc != urlparse(self.config.target_url).netloc:
+                self._record_link_targets(normalized)
+                self._queue_url(normalized)
+            except Exception:
+                continue
+        # Elements with routerLink attribute (Angular) not using <a>
+        router_candidates = page.locator('[routerlink]').all()
+        for el in router_candidates:
+            try:
+                href = el.get_attribute('routerlink')
+                normalized = self._normalize_link(url, href)
+                if not normalized:
                     continue
-                if "commit" in full_url or "github" in full_url:
-                    continue
-                if "?" in full_url and "=" in full_url:
-                    self.report.sqli_targets.add(full_url)
-                self._queue_url(full_url)
+                self._queue_url(normalized)
             except Exception:
                 continue
 
@@ -304,8 +374,11 @@ class Spider:
                 self._register_field_identifier(page.url, field_info)
 
     def _queue_url(self, url: str) -> None:
+        if not self._is_allowed_url(url):
+            return
         if url not in self._visited:
             self._to_visit.add(url)
+            self.report.discovered_urls.add(url)
 
     def _capture_request(self, request: Request) -> None:
         try:
@@ -350,8 +423,12 @@ class Spider:
                         continue
                     try:
                         page.goto(current_url, timeout=8000)
-                        page.wait_for_timeout(500)
+                        try:
+                            page.wait_for_load_state("networkidle", timeout=3000)
+                        except Exception:
+                            page.wait_for_timeout(300)
                         self._visited.add(current_url)
+                        self.report.discovered_urls.add(current_url)
                         self._extract_links(page, current_url)
                         self._extract_forms(page)
                         self._extract_loose_inputs(page)
@@ -370,9 +447,11 @@ class Spider:
                         self.report.cookies,
                         verbose=self.config.ffuf_verbose,
                     )
-                    self.report.access_targets.update(discovered)
+                    # Filter & queue only allowed
                     for url in discovered:
-                        self._queue_url(url)
+                        if self._is_allowed_url(url):
+                            self.report.access_targets.add(url)
+                            self._queue_url(url)
                 except DirectoryEnumerationError:
                     pass
 

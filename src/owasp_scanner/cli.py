@@ -9,7 +9,8 @@ from .access.analyzer import run_access_analyzer
 from .callback.server import CallbackServer, tracker
 from .core.config import load_configuration
 from .core.dependencies import verify_dependencies
-from .recon.crawler import Spider
+# O crawler baseado em Scrapy foi descontinuado em favor de uma abordagem Playwright direta.
+from .recon.crawler_legacy import Spider as PlaywrightSpider
 from .scanners.dalfox import run_dalfox_scanner
 from .scanners.sql.runner import run_sql_scanner
 from .scanners.xss.runner import run_xss_scanner
@@ -18,11 +19,11 @@ from .scanners.xss.runner import run_xss_scanner
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="OWASP Web Scanner")
     parser.add_argument("-u", "--url", required=True, help="URL do alvo")
-    parser.add_argument("--callback-port", type=int, default=8000, help="Porta do servidor de callback")
+    parser.add_argument("--callback-port", type=int, default=8080, help="Porta do servidor de callback")
     parser.add_argument("--report", default="relatorio_spider.json", help="Arquivo de saída do relatório")
     parser.add_argument("--verbose-ffuf", action="store_true", help="Mostra a execução detalhada do ffuf")
     parser.add_argument("--verbose-sql", action="store_true", help="Exibe a saída completa do sqlmap")
-    parser.add_argument("--sql-timeout", type=int, default=120, help="Tempo máximo (s) por alvo do sqlmap")
+    parser.add_argument("--sql-timeout", type=int, default=10, help="Tempo máximo (s) por alvo do sqlmap")
     return parser.parse_args()
 
 
@@ -52,7 +53,8 @@ def run_cli() -> None:
         return
 
     print("\n=== [1/5] Reconhecimento ===")
-    spider = Spider(config)
+    print("[+] Utilizando o crawler Playwright (SPA-friendly).")
+    spider = PlaywrightSpider(config)
     report = spider.run()
     report_path = Path(config.report_path)
     report.save(report_path)
