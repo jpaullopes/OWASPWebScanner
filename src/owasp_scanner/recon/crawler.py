@@ -16,8 +16,12 @@ from twisted.internet.error import ReactorAlreadyInstalledError
 
 from ..auth.login import login_juice_shop_demo, login_with_credentials
 from ..core.config import ScannerConfig
-from ..core.models import FieldAttributes, FieldInfo
+from ..core.models import FieldInfo
 from ..core.report import ReconReport
+from .utils import (
+    build_field_info_from_values as util_build_field_info_from_values,
+    choose_field_identifier as util_choose_field_identifier,
+)
 from .directory_enum import DirectoryEnumerationError, run_ffuf
 
 IGNORED_INPUT_TYPES = {"hidden", "submit", "button", "reset", "image"}
@@ -28,19 +32,22 @@ class Spider:
     """Collects URLs, forms and cookies from the target application."""
 
     config: ScannerConfig
-    report: ReconReport = field(default_factory=ReconReport)
+    report: ReconReport = field(init=False)
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.config.target_url)
         self._target_host = parsed.netloc
+        self.report = ReconReport(seed_url=self.config.target_url)
         self._reset_runtime_state(preserve_report=True)
 
     def _reset_runtime_state(self, *, preserve_report: bool = False) -> None:
         if not preserve_report:
-            self.report = ReconReport()
+            self.report = ReconReport(seed_url=self.config.target_url)
+        else:
+            self.report.seed_url = self.config.target_url or self.report.seed_url
         self._xss_seen = set()
-        self._seen_urls = set()
-        self._initial_cookies = []
+        self._seen_urls = set(self.report.discovered_urls)
+        self._initial_cookies = list(self.report.cookies)
         self._ffuf_urls = set()
 
     # ------------------------------------------------------------------
@@ -101,6 +108,7 @@ class Spider:
             )
             self.report.access_targets.update(discovered)
             self._ffuf_urls = set(discovered)
+            self.report.discovered_urls.update(discovered)
         except DirectoryEnumerationError:
             self._ffuf_urls = set()
 
@@ -122,23 +130,13 @@ class Spider:
         placeholder: Optional[str],
         data_testid: Optional[str],
     ) -> Optional[str]:
-        if name:
-            return name
-
-        priority_attributes = (
-            (data_testid, "data-testid::"),
-            (placeholder, "placeholder::"),
-            (aria, "aria::"),
+        return util_choose_field_identifier(
+            name=name,
+            element_id=element_id,
+            aria=aria,
+            placeholder=placeholder,
+            data_testid=data_testid,
         )
-
-        for value, prefix in priority_attributes:
-            if value:
-                return f"{prefix}{value}"
-
-        if element_id:
-            return f"id::{element_id}"
-
-        return None
 
     def _build_field_info_from_values(
         self,
@@ -151,33 +149,15 @@ class Spider:
         field_type: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> Optional[FieldInfo]:
-        identifier = self._identifier_from_attributes(
+        return util_build_field_info_from_values(
             name=name,
             element_id=element_id,
             aria=aria,
             placeholder=placeholder,
             data_testid=data_testid,
+            field_type=field_type,
+            tag=tag,
         )
-        if not identifier:
-            return None
-
-        attributes: FieldAttributes = {}
-        if name is not None:
-            attributes["name"] = name
-        if element_id is not None:
-            attributes["id"] = element_id
-        if aria is not None:
-            attributes["aria_label"] = aria
-        if placeholder is not None:
-            attributes["placeholder"] = placeholder
-        if data_testid is not None:
-            attributes["data_testid"] = data_testid
-        if field_type:
-            attributes["type"] = field_type.lower()
-        if tag:
-            attributes["tag"] = tag.lower()
-
-        return {"identifier": identifier, "attributes": attributes}
 
     def _add_xss_form(self, url: str, fields: Iterable[FieldInfo]) -> None:
         unique_fields: list[FieldInfo] = []
@@ -323,6 +303,7 @@ class Spider:
     async def _handle_response(self, response: Response) -> List[str]:
         url = response.url
         self._seen_urls.add(url)
+        self.report.discovered_urls.add(url)
         self._record_link_targets(url)
 
         html = response.text or ""
@@ -338,6 +319,7 @@ class Spider:
             self._record_link_targets(normalized)
             if normalized not in self._seen_urls:
                 self._seen_urls.add(normalized)
+                self.report.discovered_urls.add(normalized)
                 new_links.append(normalized)
 
         page = response.meta.get("playwright_page")
@@ -376,6 +358,7 @@ class Spider:
 
         start_urls = self._build_start_urls()
         self._seen_urls.update(start_urls)
+        self.report.discovered_urls.update(start_urls)
 
         try:
             install_reactor("twisted.internet.asyncioreactor.AsyncioSelectorReactor")
@@ -398,6 +381,8 @@ class Spider:
         process = CrawlerProcess(settings=settings)
         process.crawl(_ScrapyReconSpider, state=self, start_urls=start_urls)
         process.start()
+
+        self.report.discovered_urls.update(self._seen_urls)
 
         return self.report
 
