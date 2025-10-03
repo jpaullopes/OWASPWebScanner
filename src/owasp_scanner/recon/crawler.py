@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import scrapy
@@ -14,12 +14,11 @@ from scrapy.http import Response
 from scrapy.utils.reactor import install_reactor
 from twisted.internet.error import ReactorAlreadyInstalledError
 
-from ..auth.login import login_with_credentials, login_juice_shop_demo
+from ..auth.login import login_juice_shop_demo, login_with_credentials
 from ..core.config import ScannerConfig
 from ..core.models import FieldAttributes, FieldInfo
 from ..core.report import ReconReport
 from .directory_enum import DirectoryEnumerationError, run_ffuf
-
 
 IGNORED_INPUT_TYPES = {"hidden", "submit", "button", "reset", "image"}
 
@@ -185,11 +184,11 @@ class Spider:
         identifiers_order: list[str] = []
         seen_identifiers: set[str] = set()
 
-        for field in fields:
-            identifier = field.get("identifier")
+        for field_item in fields:
+            identifier = field_item.get("identifier")
             if not identifier or identifier in seen_identifiers:
                 continue
-            unique_fields.append(field)
+            unique_fields.append(field_item)
             identifiers_order.append(identifier)
             seen_identifiers.add(identifier)
 
@@ -204,14 +203,16 @@ class Spider:
 
     def _derive_param_names(self, fields: Sequence[FieldInfo]) -> Tuple[str, ...]:
         ordered: dict[str, None] = {}
-        for field in fields:
-            attributes = field.get("attributes", {})
+        for field_item in fields:
+            attributes = field_item.get("attributes", {})
             name = attributes.get("name")
             if name:
                 ordered.setdefault(name, None)
         return tuple(ordered.keys())
 
-    def _register_sqli_candidates(self, submit_url: str, fields: Sequence[FieldInfo]) -> None:
+    def _register_sqli_candidates(
+        self, submit_url: str, fields: Sequence[FieldInfo]
+    ) -> None:
         param_names = self._derive_param_names(fields)
         if not param_names:
             return
