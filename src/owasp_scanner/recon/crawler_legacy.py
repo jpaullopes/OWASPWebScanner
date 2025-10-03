@@ -36,6 +36,7 @@ class Spider:
         self._target_hostname: str = (parsed.hostname or "").lower()
         self._xss_seen: Set[Tuple[str, Tuple[str, ...]]] = set()
         self._clicked_router_links: Set[str] = set()
+        self._fallback_used: bool = False  # compat com antiga API híbrida
         self.report.seed_url = self.config.target_url
 
     def _filter_cookies(self, cookies: Sequence[dict]) -> list[dict]:

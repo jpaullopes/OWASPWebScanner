@@ -25,7 +25,7 @@ Durante a execução, a CLI imprime o andamento do pipeline:
 
 Antes da sequência numerada, a CLI valida se `sqlmap`, `ffuf` e `dalfox` estão disponíveis no `PATH`.
 
-1. **Reconhecimento**: o crawler Scrapy integra o Playwright para navegar de forma dinâmica, captura formulários/cookies e grava o relatório.
+1. **Reconhecimento**: o crawler Playwright puro (sem Scrapy) navega dinamicamente (auto-cliques em rotas SPA e hook de histórico), captura formulários, campos soltos, cookies e grava o relatório.
 2. **Servidor de callback**: inicialização e URL de escuta utilizada pelos payloads de XSS.
 3. **SQL Injection**: resultado por alvo (`VULNERÁVEL` ou `OK`).
 4. **XSS (Playwright)**: logs de eco para cada campo (`<-` refletiu, `~` refletiu mas foi ignorado, `X` sem reflexão) e payloads realmente injetados.
