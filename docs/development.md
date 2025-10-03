@@ -38,12 +38,25 @@ resources/              # Wordlists e artefatos estáticos
 tests/unit/             # Testes unitários com pytest
 ```
 
+### Código legado removido
+
+Apenas o diretório `src/owasp_scanner/` deve ser utilizado como fonte oficial.
+Os antigos módulos em `src/modules/` e `src/Recon/` foram descontinuados e
+mantidos apenas como histórico. Qualquer funcionalidade nova precisa seguir o
+layout descrito acima.
+
 ## Convenções de código
 
 - Python 3.12, tipagem opcional com `from __future__ import annotations`.
 - Limite de 90 caracteres por linha (configurado no `pyproject.toml` via Ruff).
 - Siga a filosofia "fail-safe": capture exceções externas (HTTP, subprocessos, Playwright) e reporte sem abortar a execução global, exceto quando necessário.
 - Prefira funções puras reutilizáveis (por exemplo, `run_sql_scanner`, `run_xss_scanner`) para facilitar testes.
+
+### Nomenclatura consistente
+
+- Evite variáveis de iteração genéricas que conflitem com imports, como `field`.
+- Prefira nomes mais descritivos (`field_item`, `form_field`, `target_url`).
+- Ao trabalhar com dataclasses ou `TypedDict`, mantenha os sufixos claros (`*_info`, `*_attributes`).
 
 ## Testes
 
