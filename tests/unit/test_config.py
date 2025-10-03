@@ -1,5 +1,4 @@
 import owasp_scanner.core.config as config_module  # type: ignore[import]
-
 from tests.helpers.owasp_imports import load_configuration
 
 
