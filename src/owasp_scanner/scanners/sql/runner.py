@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import subprocess
 import time
-from dataclasses import dataclass
-from typing import List
 
-from ...core.report import ReconReport
+from ...core.report import (
+    ReconReport,
+    SqlScanArtifact,
+    SqlScanResult,
+    SqlTargetsArtifact,
+)
 from ...recon.utils import build_cookie_header
 
 DEFAULT_SQLMAP_TIMEOUT = 120
@@ -54,31 +57,25 @@ def _stream_sqlmap(command: list[str], timeout: int) -> tuple[str, str]:
     return ("".join(output_lines), "")
 
 
-@dataclass(slots=True)
-class SqlScanResult:
-    target: str
-    vulnerable: bool
-    raw_output: str
-
-
 def run_sql_scanner(
-    report: ReconReport,
+    targets: SqlTargetsArtifact | ReconReport,
     *,
     verbose: bool = False,
     timeout: int = DEFAULT_SQLMAP_TIMEOUT,
-) -> List[SqlScanResult]:
-    """Runs sqlmap for each target stored in the report."""
+) -> SqlScanArtifact:
+    """Runs sqlmap for each provided target and returns a structured artifact."""
 
-    if not report.sqli_targets:
-        return []
+    artifact = targets.as_sql_targets() if isinstance(targets, ReconReport) else targets
 
-    cookie_header = build_cookie_header(report.cookies)
-    results: List[SqlScanResult] = []
-    targets = sorted(report.sqli_targets)
-    total = len(targets)
+    if not artifact.targets:
+        return SqlScanArtifact(targets=(), results=[])
+
+    cookie_header = build_cookie_header(artifact.cookies)
+    results: list[SqlScanResult] = []
+    total = len(artifact.targets)
 
     print(f" - {total} alvo(s) de SQL Injection identificados (timeout {timeout}s).")
-    for index, target in enumerate(targets, start=1):
+    for index, target in enumerate(artifact.targets, start=1):
         print(f"   > [{index}/{total}] Executando sqlmap contra {target}")
         command = [
             "sqlmap",
@@ -107,14 +104,14 @@ def run_sql_scanner(
                 stdout = completed.stdout or ""
                 stderr = completed.stderr or ""
         except subprocess.TimeoutExpired:
-            results.append(SqlScanResult(target, False, "Timeout"))
+            results.append(SqlScanResult(target=target, vulnerable=False, raw_output="Timeout"))
             print(f"     - Timeout após {timeout}s")
             continue
 
         vulnerable = "the back-end DBMS is" in stdout or "is vulnerable" in stdout
-        results.append(SqlScanResult(target, vulnerable, stdout))
+        results.append(SqlScanResult(target=target, vulnerable=vulnerable, raw_output=stdout))
         if verbose and stderr:
             print(stderr)
         print("     - Finalizado")
 
-    return results
+    return SqlScanArtifact(targets=artifact.targets, results=results)
