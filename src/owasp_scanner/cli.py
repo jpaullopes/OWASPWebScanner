@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Optional
 
 from .access.analyzer import run_access_analyzer
 from .callback.server import CallbackServer, tracker
 from .core.config import load_configuration
 from .core.dependencies import verify_dependencies
-from .core.report import ReconReport
 from .recon.crawler import Spider
+from .scanners.dalfox import run_dalfox_scanner
 from .scanners.sql.runner import run_sql_scanner
 from .scanners.xss.runner import run_xss_scanner
-from .scanners.xssstrike import run_xssstrike_scanner
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -84,18 +82,26 @@ def run_cli() -> None:
     else:
         print(" - Nenhum campo com eco positivo foi identificado.")
 
-    print("\n=== [5/5] XSSStrike ===")
-    xssstrike_result = run_xssstrike_scanner(config, report)
-    if xssstrike_result.skipped_reason:
-        print(f" - {xssstrike_result.skipped_reason}")
-    elif xssstrike_result.findings:
-        for finding in xssstrike_result.findings:
+    print("\n=== [5/5] Dalfox XSS ===")
+    dalfox_result = run_dalfox_scanner(config, report)
+    if dalfox_result.skipped_reason:
+        print(f" - {dalfox_result.skipped_reason}")
+    elif dalfox_result.findings:
+        for finding in dalfox_result.findings:
             status = "VULNERÁVEL" if finding.vulnerable else "OK"
             print(f" - {status} :: {finding.parameter} em {finding.url}")
+            if finding.vulnerabilities:
+                for vuln in finding.vulnerabilities:
+                    payload = vuln.get("payload")
+                    poc = vuln.get("poc")
+                    if payload:
+                        print(f"   Payload: {payload}")
+                    if poc:
+                        print(f"   PoC: {poc}")
             if finding.error:
                 print(f"   Erro: {finding.error}")
     else:
-        print(" - Nenhum alvo processado pelo XSSStrike.")
+        print(" - Nenhum alvo processado pelo Dalfox.")
 
     print("\n=== Análise de Acesso ===")
     accessible = run_access_analyzer(config, report)
