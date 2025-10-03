@@ -13,7 +13,7 @@ Esta seção descreve como os componentes do OWASP Web Scanner interagem, quais 
    - `load_configuration`: aplica normalização de URL, carrega variáveis do ambiente e do `.env` via `python-dotenv`.
    - `ReconReport`: estrutura compartilhada que armazena resultados do crawler (URLs, formulários, cookies) e é persistida em JSON.
    - `models.FieldInfo` / `models.FieldAttributes`: dicionários tipados que padronizam como campos de formulário são descritos (identificador + metadados estáveis).
-   - `verify_dependencies`: confirma se `sqlmap` e `ffuf` estão disponíveis no `PATH` antes de iniciar o pipeline.
+   - `verify_dependencies`: confirma se `sqlmap`, `ffuf` e `dalfox` estão disponíveis no `PATH` antes de iniciar o pipeline.
 
 3. **Reconhecimento (`owasp_scanner.recon`)**
     - `Spider`: utiliza Playwright (Chromium headless) para navegar no alvo, extrair links, formularios e cookies.
@@ -28,8 +28,8 @@ Esta seção descreve como os componentes do OWASP Web Scanner interagem, quais 
 
 5. **Scanners de SQL Injection e XSS (`owasp_scanner.scanners`)**
    - SQLi: para cada URL com parâmetros, roda `sqlmap` em modo batch e identifica indícios de vulnerabilidade no stdout.
-   - XSS: utiliza Playwright para testes de eco e injeta payloads com rastreamento pelo servidor de callback.
-   - XSSStrike (opcional): consome os mesmos formulários estruturados (`FieldInfo`) para rodar fuzzing adicional via ferramenta `xssstrike`, ampliando a cobertura de payloads automatizados.
+   - XSS (Playwright): utiliza automação de navegador para testes de eco e injeta payloads com rastreamento pelo servidor de callback.
+   - Dalfox: consome os formulários (`FieldInfo`) produzidos pelo crawler e executa fuzzing automático via binário `dalfox`, trazendo payloads modernos e ajustes contextuais para ampliar a detecção de XSS.
 
 6. **Analisador de controle de acesso (`owasp_scanner.access.analyzer`)**
    - Reaproveita os cookies coletados para testar, em paralelo, se URLs supostamente restritas estão acessíveis.
@@ -65,6 +65,7 @@ flowchart TD
 
 - **sqlmap**: executado via `subprocess`, com timeout padrão de 300 segundos por alvo.
 - **ffuf**: chamado via `subprocess` para enumerar diretórios; resultados são processados em JSON.
+- **Dalfox**: scanner em Go responsável pelo fuzzing de XSS baseado nas `xss_forms` geradas pelo crawler.
 - **Playwright**: automatiza um navegador Chromium; exige download prévio dos binários com `playwright install`.
 
 ## Resiliência e tratamento de erros
