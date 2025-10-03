@@ -50,7 +50,7 @@ layout descrito acima.
 - Python 3.12, tipagem opcional com `from __future__ import annotations`.
 - Limite de 90 caracteres por linha (configurado no `pyproject.toml` via Ruff).
 - Siga a filosofia "fail-safe": capture exceções externas (HTTP, subprocessos, Playwright) e reporte sem abortar a execução global, exceto quando necessário.
-- Prefira funções puras reutilizáveis (por exemplo, `run_sql_scanner`, `run_xss_scanner`) para facilitar testes.
+- Prefira funções puras baseadas em artefatos (por exemplo, `run_sql_scanner`, `run_xss_scanner`) para facilitar testes e composição.
 
 ### Nomenclatura consistente
 

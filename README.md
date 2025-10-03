@@ -86,9 +86,10 @@ from owasp_scanner.access.analyzer import run_access_analyzer
 config = load_configuration("http://alvo.exemplo")
 report = Spider(config).run()
 report.save(Path(config.report_path))
-sql_results = run_sql_scanner(report)
-xss_results = run_xss_scanner(config, report, "http://localhost:8000")
-accessible = run_access_analyzer(config, report)
+sql_results = run_sql_scanner(report.as_sql_targets())
+xss_results = run_xss_scanner(config, report.as_xss_targets(), "http://localhost:8000")
+access_results = run_access_analyzer(config, report.as_access_targets())
+accessible = access_results.accessible_urls
 ```
 
 ## 🗂️ Estrutura do projeto

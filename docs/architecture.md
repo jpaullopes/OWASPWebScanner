@@ -56,10 +56,11 @@ flowchart TD
 
 | Dados                         | Origem                   | Consumidores                              |
 |-------------------------------|--------------------------|-------------------------------------------|
-| `ReconReport.sqli_targets`    | Crawler (links com `?=`) | Scanner SQL (`run_sql_scanner`)           |
-| `ReconReport.xss_forms`       | Crawler (formulários `FieldInfo`) | Scanner XSS (`XSSScanner`) – usa metadados para construir seletores confiáveis |
-| `ReconReport.access_targets`  | `ffuf` / wordlist        | Analisador de acesso (`run_access_analyzer`) |
-| `ReconReport.cookies`         | Login/crawler            | XSS, análise de acesso, futuras etapas    |
+| `ReconReport.sqli_targets`    | Crawler (links com `?=`) | `SqlTargetsArtifact` → `run_sql_scanner`  |
+| `ReconReport.xss_forms`       | Crawler (formulários `FieldInfo`) | `XssTargetsArtifact` → `run_xss_scanner` / `run_dalfox_scanner` |
+| `ReconReport.access_targets`  | `ffuf` / wordlist        | `AccessTargetsArtifact` → `run_access_analyzer` |
+| `ReconReport.discovered_urls` | Crawler, ffuf            | Diagnóstico e reuso em etapas posteriores |
+| `ReconReport.cookies`         | Login/crawler            | XSS, Dalfox, análise de acesso            |
 
 ## Dependências externas
 
@@ -78,4 +79,4 @@ flowchart TD
 
 - Novos scanners podem consumir o mesmo `ReconReport`, adicionando campos específicos sem quebrar compatibilidade.
 - A wordlist de diretórios (`resources/common_dirs.txt`) pode ser trocada por um arquivo customizado via parâmetro em `run_ffuf`.
-- A CLI utiliza funções puras (por exemplo, `run_sql_scanner`, `run_xss_scanner`) que podem ser encadeadas em outros orquestradores ou pipelines CI/CD.
+- A CLI utiliza funções puras baseadas em artefatos (`run_sql_scanner`, `run_xss_scanner`, `run_dalfox_scanner`, `run_access_analyzer`), facilitando o encadeamento em orquestradores ou pipelines CI/CD.

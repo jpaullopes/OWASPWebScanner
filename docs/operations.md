@@ -50,10 +50,11 @@ config = load_configuration("http://alvo.local")
 report = Spider(config).run()
 report.save(Path(config.report_path))
 
-sql_results = run_sql_scanner(report)
-xss_results = run_xss_scanner(config, report, "http://localhost:8000")
-dalfox_results = run_dalfox_scanner(config, report)
-accessible_urls = run_access_analyzer(config, report)
+sql_results = run_sql_scanner(report.as_sql_targets())
+xss_results = run_xss_scanner(config, report.as_xss_targets(), "http://localhost:8000")
+dalfox_results = run_dalfox_scanner(config, report.as_xss_targets())
+access_results = run_access_analyzer(config, report.as_access_targets())
+accessible_urls = access_results.accessible_urls
 ```
 
 Essa abordagem é útil quando você deseja integrar o scanner a um orquestrador externo ou depurar apenas um estágio.
@@ -68,7 +69,7 @@ from owasp_scanner.core.report import ReconReport
 from owasp_scanner.scanners.sql.runner import run_sql_scanner
 
 report = ReconReport.load(Path("relatorio_spider.json"))
-results = run_sql_scanner(report)
+results = run_sql_scanner(report.as_sql_targets())
 ```
 
 ## Execução headless vs interativa

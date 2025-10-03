@@ -74,8 +74,10 @@ Esta referência resume os principais pacotes do projeto, destacando classes, fu
 
 ### SQL (`owasp_scanner.scanners.sql.runner`)
 
-- `SqlScanResult`: dataclass com campos `target`, `vulnerable` e `raw_output`.
-- `run_sql_scanner(report)`: itera sobre `report.sqli_targets`, executa `sqlmap` e retorna uma lista de `SqlScanResult`.
+- `SqlTargetsArtifact`: container com `targets` normalizados e cookies associados.
+- `SqlScanResult`: dataclass com campos `target`, `vulnerable` e `raw_output` (exportada em `owasp_scanner.core.report`).
+- `SqlScanArtifact`: encapsula a execução contendo `targets` e `results`.
+- `run_sql_scanner(artifact, *, verbose=False, timeout=120)`: executa `sqlmap` para cada alvo do artefato e retorna um `SqlScanArtifact`.
 
 ### XSS (`owasp_scanner.scanners.xss`)
 
@@ -84,13 +86,14 @@ Esta referência resume os principais pacotes do projeto, destacando classes, fu
   - `_echo_test(url, identifier, metadata)`: retorna `EchoResult` informando se houve reflexão e se o campo permanece disponível após a navegação.
   - `_apply_payload(identifier, payload_id, template_index, metadata)`: injeta payloads com base nos metadados e atualiza o `PayloadTracker` com `field_id` / `field_name` reais quando disponíveis.
   - `run(form_targets)`: registra eco apenas quando o campo continua presente na página final e injeta payloads nos alvos válidos, retornando dicionários com `field`, `field_id`, `field_name`, `payload_id` e `payload`.
-- `run_xss_scanner(config, report, listener_url)`: função de alto nível que prepara o browser, aplica cookies e executa o `XSSScanner`.
+- `run_xss_scanner(config, targets, listener_url)`: função de alto nível que prepara o browser, aplica cookies e executa o `XSSScanner`, retornando `XssScanArtifact`.
+- `build_xss_targets_from_url(config, url)`: helper que descobre formulários de uma URL única e retorna `XssTargetsArtifact` sem precisar rodar o crawler completo.
 - **Integração com Dalfox** (`owasp_scanner.scanners.dalfox`): reutiliza os mesmos `FieldInfo`, monta alvos com o parâmetro a ser fuzzado e invoca o binário `dalfox` para executar payloads contextuais e registrar vulnerabilidades encontradas.
 
 ## Analisador de acesso (`owasp_scanner.access.analyzer`)
 
-- `run_access_analyzer(config, report)`: cria uma sessão `requests`, aplica cookies coletados e testa URLs em paralelo (máximo de 15 threads).
-- `_prepare_session(report)`: injeta cookies na `Session`.
+- `run_access_analyzer(config, targets)`: recebe `AccessTargetsArtifact`, cria uma sessão `requests`, aplica cookies coletados e testa URLs em paralelo (máximo de 15 threads), retornando `AccessAnalysisArtifact`.
+- `_prepare_session(cookies)`: injeta cookies na `Session`.
 - `_check_url(session, url)`: retorna a URL caso o status HTTP seja 200.
 
 ## Scripts auxiliares
