@@ -58,6 +58,10 @@ def run_cli() -> None:
     report.save(report_path)
     print(f"[+] Relatório salvo em {report_path}")
 
+    sql_targets = report.as_sql_targets()
+    xss_targets = report.as_xss_targets()
+    access_targets = report.as_access_targets()
+
     callback_server = CallbackServer(args.callback_port, tracker)
     callback_url = f"http://localhost:{args.callback_port}"
 
@@ -66,24 +70,24 @@ def run_cli() -> None:
     print(f"[+] Servidor ouvindo em {callback_url}")
 
     print("\n=== [3/5] SQL Injection ===")
-    sql_results = run_sql_scanner(report, verbose=config.sql_verbose, timeout=config.sql_timeout)
-    if sql_results:
-        for result in sql_results:
+    sql_results = run_sql_scanner(sql_targets, verbose=config.sql_verbose, timeout=config.sql_timeout)
+    if sql_results.results:
+        for result in sql_results.results:
             status = "VULNERÁVEL" if result.vulnerable else "OK"
             print(f" - {status} :: {result.target}")
     else:
         print(" - Nenhum alvo de SQL Injection identificado.")
 
     print("\n=== [4/5] XSS (Playwright) ===")
-    xss_results = run_xss_scanner(config, report, callback_url)
-    if xss_results:
-        for entry in xss_results:
+    xss_results = run_xss_scanner(config, xss_targets, callback_url)
+    if xss_results.findings:
+        for entry in xss_results.findings:
             print(f" - Payload {entry['payload_id']} em {entry['field']}")
     else:
         print(" - Nenhum campo com eco positivo foi identificado.")
 
     print("\n=== [5/5] Dalfox XSS ===")
-    dalfox_result = run_dalfox_scanner(config, report)
+    dalfox_result = run_dalfox_scanner(config, xss_targets)
     if dalfox_result.skipped_reason:
         print(f" - {dalfox_result.skipped_reason}")
     elif dalfox_result.findings:
@@ -104,9 +108,9 @@ def run_cli() -> None:
         print(" - Nenhum alvo processado pelo Dalfox.")
 
     print("\n=== Análise de Acesso ===")
-    accessible = run_access_analyzer(config, report)
-    if accessible:
-        for url in accessible:
+    access_results = run_access_analyzer(config, access_targets)
+    if access_results.accessible_urls:
+        for url in access_results.accessible_urls:
             print(f" - Acesso permitido: {url}")
     else:
         print(" - Nenhuma URL restrita acessível encontrada.")
