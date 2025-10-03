@@ -1,7 +1,6 @@
 import subprocess as real_subprocess
 from types import SimpleNamespace
 
-from tests.helpers.pytest_import import pytest
 from tests.helpers.owasp_imports import dependencies
 
 
