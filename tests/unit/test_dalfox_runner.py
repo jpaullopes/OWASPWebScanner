@@ -2,11 +2,11 @@ from pathlib import Path
 from typing import List
 
 from owasp_scanner.core.config import ScannerConfig
-from owasp_scanner.core.report import ReconReport
+from owasp_scanner.core.report import XssTargetsArtifact
 from owasp_scanner.scanners.dalfox.runner import (
     DALFOX_PLACEHOLDER,
     DalfoxFinding,
-    DalfoxRunResult,
+    DalfoxScanArtifact,
     DalfoxTarget,
     _build_target_url,
     _build_targets,
@@ -16,8 +16,8 @@ from owasp_scanner.scanners.dalfox.runner import (
 )
 
 
-def _build_report(forms: List[dict]) -> ReconReport:
-    return ReconReport(xss_forms=forms)
+def _build_targets_artifact(forms: List[dict]) -> XssTargetsArtifact:
+    return XssTargetsArtifact.from_forms("https://target.test", forms)
 
 
 def _build_config() -> ScannerConfig:
@@ -47,7 +47,7 @@ def test_build_target_url_appends_placeholder():
 
 
 def test_build_targets_generates_unique_entries():
-    report = _build_report(
+    targets = _build_targets_artifact(
         [
             {
                 "url_de_envio": "https://target.test/login",
@@ -69,14 +69,14 @@ def test_build_targets_generates_unique_entries():
         ]
     )
 
-    targets = _build_targets(report.xss_forms)
-    assert len(targets) == 2
-    assert targets[0] == DalfoxTarget(
+    built = _build_targets(targets.forms)
+    assert len(built) == 2
+    assert built[0] == DalfoxTarget(
         url=f"https://target.test/login?username={DALFOX_PLACEHOLDER}",
         field_identifier="form::username",
         parameter="username",
     )
-    assert targets[1] == DalfoxTarget(
+    assert built[1] == DalfoxTarget(
         url=f"https://target.test/login?Token={DALFOX_PLACEHOLDER}",
         field_identifier="form::token",
         parameter="Token",
@@ -84,7 +84,7 @@ def test_build_targets_generates_unique_entries():
 
 
 def test_run_dalfox_scanner_skips_when_binary_missing(monkeypatch):
-    report = _build_report(
+    targets = _build_targets_artifact(
         [
             {
                 "url_de_envio": "https://target.test/login",
@@ -102,14 +102,14 @@ def test_run_dalfox_scanner_skips_when_binary_missing(monkeypatch):
         "owasp_scanner.scanners.dalfox.runner.shutil.which", lambda executable: None
     )
 
-    result = run_dalfox_scanner(_build_config(), report)
-    assert isinstance(result, DalfoxRunResult)
+    result = run_dalfox_scanner(_build_config(), targets)
+    assert isinstance(result, DalfoxScanArtifact)
     assert result.skipped_reason == "dalfox não encontrado no PATH."
     assert result.findings == []
 
 
 def test_run_dalfox_scanner_collects_vulnerabilities(monkeypatch):
-    report = _build_report(
+    targets = _build_targets_artifact(
         [
             {
                 "url_de_envio": "https://target.test/login",
@@ -151,7 +151,7 @@ def test_run_dalfox_scanner_collects_vulnerabilities(monkeypatch):
         "owasp_scanner.scanners.dalfox.runner._execute_dalfox", fake_run
     )
 
-    result = run_dalfox_scanner(_build_config(), report, timeout=30)
+    result = run_dalfox_scanner(_build_config(), targets, timeout=30)
 
     assert result.skipped_reason is None
     assert len(result.findings) == 1
@@ -166,7 +166,7 @@ def test_run_dalfox_scanner_collects_vulnerabilities(monkeypatch):
 
 
 def test_run_dalfox_scanner_handles_empty_output(monkeypatch):
-    report = _build_report(
+    targets = _build_targets_artifact(
         [
             {
                 "url_de_envio": "https://target.test/login",
@@ -196,7 +196,7 @@ def test_run_dalfox_scanner_handles_empty_output(monkeypatch):
         "owasp_scanner.scanners.dalfox.runner._execute_dalfox", fake_run
     )
 
-    result = run_dalfox_scanner(_build_config(), report)
+    result = run_dalfox_scanner(_build_config(), targets)
 
     assert result.skipped_reason is None
     assert len(result.findings) == 1

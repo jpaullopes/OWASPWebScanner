@@ -1,4 +1,4 @@
-from tests.helpers.owasp_imports import ReconReport, ScannerConfig, analyzer
+from tests.helpers.owasp_imports import AccessTargetsArtifact, ScannerConfig, analyzer
 
 
 def make_config(tmp_path):
@@ -10,7 +10,10 @@ def make_config(tmp_path):
 
 
 def test_run_access_analyzer_returns_accessible_urls(monkeypatch, tmp_path):
-    report = ReconReport(access_targets={"https://example.com/admin", "https://example.com/profile"})
+    artifact = AccessTargetsArtifact.from_iterable([
+        "https://example.com/admin",
+        "https://example.com/profile",
+    ])
 
     calls = []
 
@@ -22,9 +25,9 @@ def test_run_access_analyzer_returns_accessible_urls(monkeypatch, tmp_path):
 
     monkeypatch.setattr(analyzer, "_check_url", fake_check)
 
-    result = analyzer.run_access_analyzer(make_config(tmp_path), report)
+    result = analyzer.run_access_analyzer(make_config(tmp_path), artifact)
 
-    assert result == ["https://example.com/admin"]
+    assert result.accessible_urls == ["https://example.com/admin"]
     assert {call[1] for call in calls} == {
         "https://example.com/admin",
         "https://example.com/profile",
@@ -32,6 +35,8 @@ def test_run_access_analyzer_returns_accessible_urls(monkeypatch, tmp_path):
 
 
 def test_run_access_analyzer_returns_empty_when_no_targets(tmp_path):
-    report = ReconReport()
+    artifact = AccessTargetsArtifact.from_iterable([])
 
-    assert analyzer.run_access_analyzer(make_config(tmp_path), report) == []
+    result = analyzer.run_access_analyzer(make_config(tmp_path), artifact)
+
+    assert result.accessible_urls == []
