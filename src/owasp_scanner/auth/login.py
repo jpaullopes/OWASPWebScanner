@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Optional
 from urllib.parse import urljoin
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 
 def _close_overlays(page: Page) -> None:
