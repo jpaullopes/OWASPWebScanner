@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
-from typing import Iterable, List
+from typing import List
 
 import requests
 
