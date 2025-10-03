@@ -108,6 +108,10 @@ src/owasp_scanner/
 
 O relatório `relatorio_spider.json` é salvo na raiz do projeto (ou no caminho configurado) e contém todas as descobertas para reutilização posterior.
 
+A base de código ativa vive inteiramente em `src/owasp_scanner/`. Estruturas
+anteriores como `src/modules/` foram mantidas apenas para referência histórica e
+não participam mais da execução.
+
 ## 🧪 Testes
 
 O repositório possui uma suíte de testes unitários construída com `pytest`, cobrindo os componentes centrais (configuração, relatório, analisadores e utilidades). Para executá-los:
