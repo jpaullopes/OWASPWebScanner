@@ -15,17 +15,21 @@ owasp-web-scanner -u http://alvo.local [--callback-port 8000] [--report caminho/
 | `-u, --url`      | str    | **Obrigatória**. URL base do alvo. O caminho é normalizado retirando barras finais duplicadas. |
 | `--callback-port`| int    | Porta utilizada pelo servidor de callback de XSS (padrão: `8000`).                             |
 | `--report`       | str    | Caminho para o arquivo JSON que consolida o reconhecimento (padrão: `relatorio_spider.json`). |
+| `--verbose-ffuf` | flag   | Exibe o output completo da enumeração de diretórios (`ffuf`).                                |
+| `--verbose-sql`  | flag   | Habilita a saída detalhada do `sqlmap` durante o fuzzing de SQLi.                            |
+| `--sql-timeout`  | int    | Tempo máximo, em segundos, para cada alvo analisado pelo `sqlmap` (padrão: `120`).           |
 
 ### Saída padrão
 
 Durante a execução, a CLI imprime o andamento do pipeline:
 
-1. **Verificação de dependências**: checa `sqlmap` e `ffuf`.
-2. **Reconhecimento**: status do crawler Playwright e gravação do relatório.
-3. **Servidor de callback**: inicialização e URL de escuta.
-4. **SQL Injection**: resultado por alvo (`VULNERÁVEL` ou `OK`).
-5. **XSS**: logs de eco para cada campo (`<-` refletiu, `~` refletiu mas foi ignorado, `X` sem reflexão) e payloads realmente injetados.
-6. **XSSStrike (opcional)**: quando habilitado, roda fuzzing complementar com o binário externo `xssstrike` usando os formulários descobertos.
+Antes da sequência numerada, a CLI valida se `sqlmap`, `ffuf` e `dalfox` estão disponíveis no `PATH`.
+
+1. **Reconhecimento**: o crawler Scrapy integra o Playwright para navegar de forma dinâmica, captura formulários/cookies e grava o relatório.
+2. **Servidor de callback**: inicialização e URL de escuta utilizada pelos payloads de XSS.
+3. **SQL Injection**: resultado por alvo (`VULNERÁVEL` ou `OK`).
+4. **XSS (Playwright)**: logs de eco para cada campo (`<-` refletiu, `~` refletiu mas foi ignorado, `X` sem reflexão) e payloads realmente injetados.
+5. **Dalfox XSS**: fuzzing complementar com o binário `dalfox`, exibindo payloads e PoCs retornados.
 6. **Análise de acesso**: URLs acessíveis inesperadamente.
 
 ## Execução parcial de etapas
@@ -39,6 +43,7 @@ from owasp_scanner.core.report import ReconReport
 from owasp_scanner.recon.crawler import Spider
 from owasp_scanner.scanners.sql.runner import run_sql_scanner
 from owasp_scanner.scanners.xss.runner import run_xss_scanner
+from owasp_scanner.scanners.dalfox import run_dalfox_scanner
 from owasp_scanner.access.analyzer import run_access_analyzer
 
 config = load_configuration("http://alvo.local")
@@ -47,6 +52,7 @@ report.save(Path(config.report_path))
 
 sql_results = run_sql_scanner(report)
 xss_results = run_xss_scanner(config, report, "http://localhost:8000")
+dalfox_results = run_dalfox_scanner(config, report)
 accessible_urls = run_access_analyzer(config, report)
 ```
 
