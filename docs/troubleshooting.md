@@ -43,6 +43,29 @@ pip install -e '.[dev]'
 - Ajuste o timeout chamando `run_ffuf(..., timeout=600)` ao usar a API manualmente.
 - Garanta conectividade com o alvo (firewall, proxy, VPN).
 
+## Estrutura de código
+
+### `ModuleNotFoundError` ao importar de `src.modules`
+
+**Causa:** as rotas `src/modules/` e `src/Recon/` foram descontinuadas na refatoração mais recente.
+
+**Solução:** importe sempre a partir de `owasp_scanner`:
+
+```python
+# Correto
+from owasp_scanner.recon.crawler import Spider
+from owasp_scanner.access.analyzer import run_access_analyzer
+```
+
+## Execução do CLI
+
+### SQL scanner não executa
+
+**Sintoma:** a etapa `[3/5] SQL Injection` termina imediatamente sem listar alvos.
+
+**Solução:** verifique se o arquivo `src/owasp_scanner/cli.py` contém a chamada para `run_sql_scanner`.
+Se estiver trabalhando com uma cópia antiga, atualize-a para a mesma lógica da branch atual.
+
 ## Playwright
 
 ### `playwright._impl._errors.Error: Browser closed` ou timeouts frequentes
