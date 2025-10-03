@@ -64,7 +64,7 @@ def run_ffuf(
 
     wordlist_path = wordlist or DEFAULT_WORDLIST
     if not wordlist_path.exists():
-        raise FileNotFoundError(f"Wordlist not found: {wordlist_path}")
+        raise DirectoryEnumerationError(f"Wordlist not found: {wordlist_path}")
 
     headers: list[str] = []
     filters: set[int] = set(filter_sizes or [])
