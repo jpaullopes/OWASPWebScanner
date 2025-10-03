@@ -8,6 +8,8 @@ dependencies = [
     "requests",
     "beautifulsoup4", 
     "playwright",
+    "scrapy",
+    "scrapy-playwright",
     "pyngrok",
     "python-dotenv"
 ]
@@ -24,6 +26,12 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"owasp_scanner.resources" = ["*.txt"]
 
 [tool.ruff]
 # Define o tamanho máximo de uma linha de código
