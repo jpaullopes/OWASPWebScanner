@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from owasp_scanner.core.config import ScannerConfig
-from owasp_scanner.recon.crawler import Spider
+from owasp_scanner.recon.crawler_legacy import Spider
 
 
 def _build_spider() -> Spider:

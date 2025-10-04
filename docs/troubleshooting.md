@@ -53,7 +53,7 @@ pip install -e '.[dev]'
 
 ```python
 # Correto
-from owasp_scanner.recon.crawler import Spider
+from owasp_scanner.recon.crawler_legacy import Spider
 from owasp_scanner.access.analyzer import run_access_analyzer
 ```
 
