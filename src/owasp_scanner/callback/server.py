@@ -44,7 +44,13 @@ class PayloadTracker:
     injected: Dict[str, PayloadInfo] = field(default_factory=dict)
     received: Dict[str, CallbackInfo] = field(default_factory=dict)
 
-    def register_payload(self, field_id: str | None, field_name: str | None, payload: str, origin_url: str) -> str:
+    def register_payload(
+        self,
+        field_id: str | None,
+        field_name: str | None,
+        payload: str,
+        origin_url: str,
+    ) -> str:
         payload_id = str(uuid.uuid4())[:8]
         info = PayloadInfo(
             payload_id=payload_id,
@@ -57,7 +63,11 @@ class PayloadTracker:
         self.injected[payload_id] = info
         return payload_id
 
-    def register_callback(self, payload_id: Optional[str], request_handler: http.server.BaseHTTPRequestHandler) -> CallbackInfo:
+    def register_callback(
+        self,
+        payload_id: Optional[str],
+        request_handler: http.server.BaseHTTPRequestHandler,
+    ) -> CallbackInfo:
         callback_id = str(uuid.uuid4())[:8]
         timestamp = datetime.now().isoformat()
         parsed = urlparse(request_handler.path)
