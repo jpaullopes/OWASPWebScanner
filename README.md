@@ -78,7 +78,7 @@ Cada módulo pode ser executado separadamente importando diretamente o pacote:
 from pathlib import Path
 from owasp_scanner.core.config import load_configuration
 from owasp_scanner.core.report import ReconReport
-from owasp_scanner.recon.crawler_legacy import Spider
+from owasp_scanner.recon.crawler import Spider
 from owasp_scanner.scanners.sql.runner import run_sql_scanner
 from owasp_scanner.scanners.xss.runner import run_xss_scanner
 from owasp_scanner.access.analyzer import run_access_analyzer

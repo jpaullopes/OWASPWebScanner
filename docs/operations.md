@@ -40,7 +40,7 @@ Os módulos podem ser executados de forma isolada dentro de scripts Python perso
 from pathlib import Path
 from owasp_scanner.core.config import load_configuration
 from owasp_scanner.core.report import ReconReport
-from owasp_scanner.recon.crawler_legacy import Spider
+from owasp_scanner.recon.crawler import Spider
 from owasp_scanner.scanners.sql.runner import run_sql_scanner
 from owasp_scanner.scanners.xss.runner import run_xss_scanner
 from owasp_scanner.scanners.dalfox import run_dalfox_scanner

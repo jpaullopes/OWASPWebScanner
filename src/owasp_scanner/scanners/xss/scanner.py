@@ -495,7 +495,9 @@ class XSSScanner:
                     )
                 elif echo_result.status is EchoStatus.REFLECTED_FIELD_MISSING:
                     print(
-                        f"   [eco] ~ Reflexão detectada em '{field_identifier}', mas o campo não existe na página final; ignorando."
+                        "   [eco] ~ Reflexão detectada em "
+                        f"'{field_identifier}', mas o campo não existe na página final; "
+                        "ignorando."
                     )
                 else:
                     print(f"   [eco] X Sem reflexão para '{field_identifier}'")
@@ -527,7 +529,9 @@ class XSSScanner:
                     if record:
                         self.injected_payloads.append(record)
                         print(
-                            f"   [injeção] Payload {payload_id} (template {index}) enviado ao campo '{finding.field_identifier}'"
+                            "   [injeção] Payload "
+                            f"{payload_id} (template {index}) enviado ao campo "
+                            f"'{finding.field_identifier}'"
                         )
                     self.page.wait_for_timeout(INJECTION_SETTLE_MS)
                 except Exception as exc:

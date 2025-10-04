@@ -12,7 +12,6 @@ from ...core.report import ReconReport, XssScanArtifact, XssTargetsArtifact
 from ...recon.utils import build_field_info_from_values
 from .scanner import XSSScanner
 
-
 IGNORED_INPUT_TYPES = {"hidden", "submit", "button", "reset", "image"}
 
 
