@@ -24,6 +24,8 @@ class ScannerConfig:
     ffuf_verbose: bool = False
     sql_verbose: bool = False
     sql_timeout: int = 120
+    legacy_crawler: bool = False
+    legacy_fallback: bool = True
 
     @property
     def login_url(self) -> str:
@@ -37,6 +39,8 @@ def load_configuration(
     ffuf_verbose: bool = False,
     sql_verbose: bool = False,
     sql_timeout: Optional[int] = None,
+    legacy_crawler: bool = False,
+    legacy_fallback: Optional[bool] = None,
 ) -> ScannerConfig:
     """Builds a ``ScannerConfig`` from CLI input and environment variables."""
 
@@ -48,6 +52,10 @@ def load_configuration(
     auth_password = os.getenv("PASSWORD_LOGIN")
 
     timeout_value = sql_timeout if sql_timeout is not None else int(os.getenv("SQLMAP_TIMEOUT", "120"))
+    legacy_from_env = os.getenv("USE_LEGACY_CRAWLER", "false").lower() in {"1", "true", "yes"}
+    legacy_enabled = legacy_crawler or legacy_from_env
+    fallback_from_env = os.getenv("FALLBACK_LEGACY_CRAWLER", "true").lower() in {"1", "true", "yes"}
+    fallback_enabled = legacy_fallback if legacy_fallback is not None else fallback_from_env
 
     return ScannerConfig(
         target_url=target_url.rstrip("/"),
@@ -59,4 +67,6 @@ def load_configuration(
         ffuf_verbose=ffuf_verbose,
         sql_verbose=sql_verbose,
         sql_timeout=timeout_value,
+        legacy_crawler=legacy_enabled,
+        legacy_fallback=fallback_enabled,
     )

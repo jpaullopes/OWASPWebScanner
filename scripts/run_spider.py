@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from owasp_scanner.core.config import load_configuration
-from owasp_scanner.recon.crawler_legacy import Spider
+from owasp_scanner.recon.crawler import Spider
 
 
 def parse_arguments() -> argparse.Namespace:

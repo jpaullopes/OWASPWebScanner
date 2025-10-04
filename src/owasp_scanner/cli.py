@@ -10,7 +10,7 @@ from .callback.server import CallbackServer, tracker
 from .core.config import load_configuration
 from .core.dependencies import verify_dependencies
 # O crawler baseado em Scrapy foi descontinuado em favor de uma abordagem Playwright direta.
-from .recon.crawler_legacy import Spider as PlaywrightSpider
+from .recon.crawler import Spider as PlaywrightSpider
 from .scanners.dalfox import run_dalfox_scanner
 from .scanners.sql.runner import run_sql_scanner
 from .scanners.xss.runner import run_xss_scanner

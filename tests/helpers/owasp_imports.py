@@ -9,8 +9,8 @@ from owasp_scanner.core.config import (  # type: ignore[import]
 from owasp_scanner.core.report import (  # type: ignore[import]
     AccessTargetsArtifact,
     ReconReport,
-    XssTargetsArtifact,
     SqlTargetsArtifact,
+    XssTargetsArtifact,
 )
 from owasp_scanner.recon.utils import build_cookie_header  # type: ignore[import]
 from owasp_scanner.scanners.sql import runner as sql_runner  # type: ignore[import]
