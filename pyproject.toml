@@ -1,6 +1,6 @@
 [project]
 name = "owaspwebscanner"
-version = "0.1.0"
+version = "0.2.0"
 description = "A comprehensive OWASP web vulnerability scanner for detecting XSS, SQL Injection, Broken Access Control, and more using automated tools."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,8 +8,7 @@ dependencies = [
     "requests",
     "beautifulsoup4", 
     "playwright",
-    "scrapy",
-    "scrapy-playwright",
+
     "pyngrok",
     "python-dotenv"
 ]
@@ -35,7 +34,7 @@ include-package-data = true
 
 [tool.ruff]
 # Define o tamanho máximo de uma linha de código
-line-length = 90
+line-length = 120
 
 [tool.ruff.lint]
 # Seleciona quais grupos de regras o Ruff deve aplicar.
