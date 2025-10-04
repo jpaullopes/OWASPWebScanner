@@ -49,6 +49,7 @@ desktop.ini
 relatorio_spider.json
 urls_com_parametros.txt
 uv.lock
+meu_relatorio.json
 
 # Coverage reports
 .coverage
