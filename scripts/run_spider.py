@@ -9,7 +9,16 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 from typing import Optional
+
+# Guarantee imports resolve to the local source tree when running from a checkout.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_PATH = PROJECT_ROOT / "src"
+if SRC_PATH.exists():
+    src_str = str(SRC_PATH)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
 
 from owasp_scanner.core.config import load_configuration
 from owasp_scanner.recon.crawler import Spider
@@ -104,6 +113,17 @@ def main() -> None:
     print(f"    Alvos para SQL Injection: {sql_count}")
     print(f"    Alvos para Access Ctrl  : {access_count}")
     print(f"    Cookies capturados      : {cookies_count}")
+
+    runtime = getattr(spider, "runtime_state", None)
+    if runtime is not None:
+        ffuf_count = len(getattr(runtime, "ffuf_urls", []))
+        visited_count = len(getattr(runtime, "visited_urls", []))
+        print(f"    URLs visitadas          : {visited_count}")
+        print(f"    URLs vindas do FFUF     : {ffuf_count}")
+        if getattr(runtime, "fallback_used", False):
+            print("    * Fallback para crawler legado foi acionado")
+    elif getattr(config, "legacy_crawler", False):
+        print("    * Execução forçada no crawler legado")
 
 
 if __name__ == "__main__":
