@@ -127,8 +127,11 @@ class Spider:
                 while self._to_visit or not ffuf_ran:
                     while self._to_visit:
                         current_url = self._to_visit.pop()
+                        print(f"LOOP: Tentando visitar: {current_url} (to_visit restante: {len(self._to_visit)})")
                         if current_url in self._state.visited_urls:
+                            print(f"LOOP: Pulando URL já visitada: {current_url}")
                             continue
+                        print(f"LOOP: Navegando para: {current_url} (total visitadas: {len(self._state.visited_urls)})")
                         self._navigate_and_collect(page, current_url)
 
                     if ffuf_ran:
@@ -138,6 +141,12 @@ class Spider:
                     ffuf_ran = True
             finally:
                 browser.close()
+
+        # Aplicar deduplicação se configurado
+        if hasattr(self.config, 'deduplicate_spa_urls') and self.config.deduplicate_spa_urls:
+            original_count = len(self.report.discovered_urls)
+            self.report.discovered_urls = self.report._deduplicate_spa_urls(self.report.discovered_urls)
+            print(f"Deduplicação SPA: {original_count} -> {len(self.report.discovered_urls)} URLs")
 
         return self.report
 
@@ -154,11 +163,20 @@ class Spider:
 
     def _queue_url(self, url: str) -> None:
         if not self._is_allowed_url(url):
+            print(f"QUEUE: URL não permitida: {url}")
             return
         if url in self._state.visited_urls:
+            print(f"QUEUE: URL já visitada: {url}")
+            return
+        if url in self._to_visit:
+            print(f"QUEUE: URL já na fila: {url}")
             return
         if url not in self._state.seen_urls:
             self._state.seen_urls.add(url)
+            print(f"QUEUE: Nova URL adicionada: {url} (total seen: {len(self._state.seen_urls)}, to_visit: {len(self._to_visit)})")
+        else:
+            print(f"QUEUE: URL já vista, pulando re-adição: {url}")
+            return
         self._to_visit.add(url)
         self.report.discovered_urls.add(url)
 
@@ -219,8 +237,10 @@ class Spider:
                 if not normalized:
                     continue
                 if normalized in self._state.clicked_router_links:
+                    print(f"SKIP: já clicado em {normalized}")
                     continue
 
+                print(f"CLICK: {normalized} (total clicado: {len(self._state.clicked_router_links)})")
                 self._state.clicked_router_links.add(normalized)
 
                 try:
@@ -290,17 +310,34 @@ class Spider:
         except Exception:
             return ""
 
+    # Esse metodo foi modificado para podeer lidar com SPAs
     def _normalize_candidate(self, base_url: str, candidate: Optional[str]) -> Optional[str]:
         if not candidate:
             return None
 
-        value = candidate
-        if value.startswith("#"):
-            value = value[1:]
-        if value.startswith("/"):
-            value = urljoin(self.config.target_url, value)
-
-        return self._link_collector.normalize(base_url, value)
+        # Para SPAs, sempre use a URL base para fragmentos e caminhos absolutos
+        if candidate.startswith("#/"):
+            # Para fragmentos SPA, usar target_url base
+            parsed_target = urlparse(self.config.target_url)
+            base_url = f"{parsed_target.scheme}://{parsed_target.netloc}/"
+            result = base_url + candidate
+            # Verificar se é permitida
+            if self._target_filter.is_allowed(result):
+                print(f"SPA normalize: {candidate} -> {result}")
+                return result
+            return None
+        elif candidate.startswith("/"):
+            # Para caminhos absolutos, usar target_url base  
+            parsed_target = urlparse(self.config.target_url)
+            base_without_fragment = urlunparse(parsed_target._replace(fragment=""))
+            result = self._link_collector.normalize_link(base_without_fragment, candidate)
+            print(f"SPA normalize: {candidate} -> {result}")
+            return result
+        
+        # Para outros casos (links relativos, etc.), use o base_url atual
+        result = self._link_collector.normalize_link(base_url, candidate)
+        print(f"Regular normalize: {candidate} -> {result}")
+        return result
 
     @staticmethod
     def _safe_locator_list(locator_owner: Page, selector: str) -> list:

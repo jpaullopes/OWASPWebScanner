@@ -34,7 +34,7 @@ class LinkCollector:
 
         for anchor in self._safe_locator_list(page, "a"):
             href = self._safe_attribute(anchor, "href") or self._safe_attribute(anchor, "routerlink")
-            normalized = self.normalize(current_url, href)
+            normalized = self.normalize_link(current_url, href)
             if not normalized:
                 continue
             self.record_url(normalized)
@@ -45,7 +45,7 @@ class LinkCollector:
 
         for element in self._safe_locator_list(page, "[routerlink]"):
             href = self._safe_attribute(element, "routerlink")
-            normalized = self.normalize(current_url, href)
+            normalized = self.normalize_link(current_url, href)
             if not normalized:
                 continue
             if normalized not in self.state.seen_urls:
@@ -59,7 +59,7 @@ class LinkCollector:
         new_links: List[str] = []
         for anchor in soup.find_all("a"):
             href = anchor.get("href") or anchor.get("routerlink")
-            normalized = self.normalize(current_url, href)
+            normalized = self.normalize_link(current_url, href)
             if not normalized:
                 continue
             self.record_url(normalized)
@@ -69,11 +69,25 @@ class LinkCollector:
                 new_links.append(normalized)
         return new_links
 
-    def normalize(self, base_url: str, href: Optional[str]) -> Optional[str]:
+    def normalize_link(self, base_url: str, href: Optional[str]) -> Optional[str]:
         if not href:
             return None
 
-        joined = urljoin(base_url, href)
+        # Para SPAs, usar lógica especial para fragmentos e caminhos absolutos
+        if href.startswith("#/"):
+            # Usar URL base sem fragmentos para SPAs
+            parsed = urlparse(base_url)
+            # Pegar a URL raiz e adicionar o fragmento manualmente
+            root_url = f"{parsed.scheme}://{parsed.netloc}/"
+            joined = root_url + href
+        elif href.startswith("/"):
+            # Para caminhos absolutos, usar URL raiz
+            parsed = urlparse(base_url)
+            root_url = f"{parsed.scheme}://{parsed.netloc}"
+            joined = urljoin(root_url, href)
+        else:
+            joined = urljoin(base_url, href)
+            
         if not self.target_filter.is_allowed(joined):
             return None
 

@@ -40,10 +40,33 @@ class ReconReport:
     access_targets: Set[str] = field(default_factory=set)
     cookies: List[Dict[str, Any]] = field(default_factory=list)
 
-    def to_json(self) -> str:
+    def _deduplicate_spa_urls(self, urls: Set[str]) -> Set[str]:
+        """Remove URLs duplicadas entre versões SPA (#/) e diretas (/), priorizando SPA."""
+        from urllib.parse import urlparse, urlunparse
+        
+        spa_urls = {url for url in urls if "#/" in url}
+        direct_urls = {url for url in urls if "#/" not in url}
+        
+        # Para cada URL SPA, remover a versão direta equivalente
+        deduplicated = set(spa_urls)
+        for direct_url in direct_urls:
+            # Verificar se existe versão SPA equivalente
+            parsed = urlparse(direct_url)
+            path = parsed.path.lstrip('/')  # Remove barra inicial
+            potential_spa = f"{parsed.scheme}://{parsed.netloc}/#/{path}"
+            if potential_spa not in spa_urls:
+                deduplicated.add(direct_url)
+        
+        return deduplicated
+    
+    def to_json(self, deduplicate_spa: bool = False) -> str:
+        discovered_urls = self.discovered_urls
+        if deduplicate_spa:
+            discovered_urls = self._deduplicate_spa_urls(discovered_urls)
+            
         data = {
             "seed_url": self.seed_url,
-            "urls_descobertas": sorted(self.discovered_urls),
+            "urls_descobertas": sorted(discovered_urls),
             "alvos_para_sqli": sorted(self.sqli_targets),
             "alvos_para_xss": self.xss_forms,
             "alvos_para_access": sorted(self.access_targets),
@@ -51,8 +74,8 @@ class ReconReport:
         }
         return json.dumps(data, indent=4)
 
-    def save(self, path: Path) -> None:
-        path.write_text(self.to_json(), encoding="utf-8")
+    def save(self, path: Path, deduplicate_spa: bool = False) -> None:
+        path.write_text(self.to_json(deduplicate_spa=deduplicate_spa), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path) -> "ReconReport":

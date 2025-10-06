@@ -57,7 +57,7 @@ def run_cli() -> None:
     spider = PlaywrightSpider(config)
     report = spider.run()
     report_path = Path(config.report_path)
-    report.save(report_path)
+    report.save(report_path, deduplicate_spa=getattr(config, 'deduplicate_spa_urls', False))
     print(f"[+] Relatório salvo em {report_path}")
 
     sql_targets = report.as_sql_targets()

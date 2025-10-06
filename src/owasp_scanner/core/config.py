@@ -26,6 +26,7 @@ class ScannerConfig:
     sql_timeout: int = 120
     legacy_crawler: bool = False
     legacy_fallback: bool = True
+    deduplicate_spa_urls: bool = True # Chang this flag to True to enable SPA URL deduplication
 
     @property
     def login_url(self) -> str:

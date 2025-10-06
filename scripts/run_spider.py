@@ -99,7 +99,7 @@ def main() -> None:
         return
 
     report_path = Path(config.report_path)
-    report.save(report_path)
+    report.save(report_path, deduplicate_spa=config.deduplicate_spa_urls)
 
     print(f"[+] Relatório salvo em {report_path}")
     urls_count = count_collection(report, "discovered_urls", "urls_descobertas")

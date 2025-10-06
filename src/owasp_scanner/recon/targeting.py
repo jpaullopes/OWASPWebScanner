@@ -39,12 +39,18 @@ class TargetFilter:
                 return False
 
         candidate = host or hostname
-        if candidate and any(keyword in candidate for keyword in self.excluded_keywords):
+        #usando a abstração lá de baixo para evitar repetição
+        if candidate and self._has_excluded_keyword(candidate):
             return False
 
         return True
 
+    # mesma coisa
     def contains_excluded_keyword(self, value: str) -> bool:
+        return self._has_excluded_keyword(value)
+
+    # A modificação foi feita aqui
+    def _has_excluded_keyword(self, value: str) -> bool:
         if not value:
             return False
         normalized = value.lower()
