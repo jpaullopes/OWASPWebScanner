@@ -1,18 +1,57 @@
+# Virtual environments
 venv/
 .venv/
 env/
+ENV/
+venv.bak/
+
+# Python cache and compiled files
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-.env
+*.so
+
+# Build and distribution
 build/
 dist/
 *.egg-info/
+*.egg
+.eggs/
+
+# Environment variables
+.env
+.env.local
+
+# Linting and formatting cache
 .ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Logs
 *.log
+logs/
+
+# IDE specific files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# OS specific files
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Project specific files
+relatorio_spider.json
+urls_com_parametros.txt
+uv.lock
+meu_relatorio.json
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage.xml

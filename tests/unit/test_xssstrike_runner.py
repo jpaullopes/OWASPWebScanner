@@ -1,0 +1,1 @@
+"""Legacy placeholder for removed XSSStrike tests."""

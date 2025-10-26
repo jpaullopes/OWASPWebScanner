@@ -1,0 +1,16 @@
+admin
+api
+backup
+config
+dashboard
+debug
+docs
+ftp
+internal
+login
+private
+reports
+secure
+test
+upload
+users
